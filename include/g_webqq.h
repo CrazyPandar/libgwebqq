@@ -1,7 +1,9 @@
+#ifndef _G_WEBQQ_H_
+#define _G_WEBQQ_H_
 #include <string.h>
 #include <glib.h>
 #include <libsoup/soup.h>
-#include "qqhosts.h"
+#include "g_qqhosts.h"
 
 #define _DEBUG_
 #ifdef _DEBUG_
@@ -50,4 +52,7 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd);
 int GWQSessionExit(GWQSession* wqs);
 
 int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
+
+#endif
+
 

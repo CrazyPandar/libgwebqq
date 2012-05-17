@@ -19,7 +19,7 @@ static int GWQEncPwdVc(const gchar* passwd, const gchar* vcode, GString *ret)
 		GWQ_ERR_OUT(ERR_OUT, "\n");
 	}
 
-	g_checksum_update(cs, passwd, pwdLen);
+	g_checksum_update(cs, (const guchar*)passwd, pwdLen);
 	g_checksum_get_digest(cs, sumBuf, &sumBufSize);
 
 	g_checksum_reset(cs);
@@ -35,7 +35,7 @@ static int GWQEncPwdVc(const gchar* passwd, const gchar* vcode, GString *ret)
 	g_string_append(tmpStr, vcode);
 	
 	g_checksum_reset(cs);
-	g_checksum_update(cs, tmpStr->str, tmpStr->len);
+	g_checksum_update(cs, (const guchar*)tmpStr->str, tmpStr->len);
 	tmpCStr = g_checksum_get_string(cs);
 	tmpCStr = g_ascii_strup(tmpCStr, strlen(tmpCStr));
 	
@@ -55,7 +55,8 @@ ERR_OUT:
 static int _GWQSessionDoLogin(GWQSession* wqs);
 static void _process_check_resp(SoupSession *session, SoupMessage *msg,  gpointer user_data);
 static void _process_login_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
-
+static void soup_cookie_jar_get_cookie_value(SoupCookieJar* scj, 
+        const gchar* domain, const gchar* path, const gchar* name, GString* value);
 int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
 {
 	if (!qqNum || !passwd) {
@@ -72,6 +73,8 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
     if (!(wqs->scj = soup_cookie_jar_new())) {
         GWQ_ERR_OUT(ERR_UNREF_SPS, "\n");
     }
+    
+    soup_session_add_feature(wqs->sps, SOUP_SESSION_FEATURE(wqs->scj));
     
     wqs->st = GWQS_ST_OFFLINE;
     wqs->verifyCode = g_string_new("");
@@ -210,6 +213,7 @@ static int _GWQSessionDoLogin(GWQSession* wqs)
 	} else {
 		wqs->st = GWQS_ST_OFFLINE;
 		wqs->loginCallback(wqs, wqs->context);
+		return 0;
 	}
 }
 
@@ -225,10 +229,17 @@ static void _process_login_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
     GWQ_DBG("login responsed, retcode=%d\nreason:%s\n", msg->status_code, msg->reason_phrase);
     if (sBuf) {
         soup_buffer_get_data(sBuf, &data, &size);
-        if (size>0) {
-        	//gchar *tmpCStr, *vc, *end;
-        	
+
+        if (data && size>0) {
         	GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "ptlogin2.qq.com", "/", "ptcz", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "qq.com", "/", "skey", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "qq.com", "/", "ptwebqq", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "ptlogin2.qq.com", "/", "ptuserinfo", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "qq.com", "/", "uin", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "qq.com", "/", "ptisp", wqs->ptcz);
+        	soup_cookie_jar_get_cookie_value(wqs->scj, "qq.com", "/", "pt2gguin", wqs->ptcz);
+        	GWQ_DBG("ptcz: %s\n", wqs->ptcz->str);
         	wqs->st = GWQS_ST_IDLE;
         	wqs->loginCallback(wqs, wqs->context);
         } else {
@@ -240,4 +251,56 @@ static void _process_login_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     
 }
+
+struct cookie_key {
+    const gchar* domain;
+    const gchar* path;
+    const gchar* name;
+};
+
+static gint _find_cookie(gconstpointer data, gconstpointer userData)
+{
+    struct cookie_key *ck;
+    SoupCookie *sc;
+    
+    ck = (struct cookie_key*)userData;
+    sc = (SoupCookie*)data;
+    
+    GWQ_DBG("find cookie:[%s%s] %s = %s\n", 
+            soup_cookie_get_domain(sc),
+            soup_cookie_get_path(sc),
+            soup_cookie_get_name(sc),
+            soup_cookie_get_value(sc));
+    if (soup_cookie_domain_matches(sc, ck->domain) 
+            && !strcmp(ck->name, soup_cookie_get_name(sc))
+            && !strcmp(ck->path, soup_cookie_get_path(sc))) {
+        return 0;
+    }
+    return -1;
+}
+
+static void soup_cookie_jar_get_cookie_value(SoupCookieJar* scj, 
+        const gchar* domain, const gchar* path, const gchar* name, GString* value)
+{
+    GSList *sl;
+    GSList *tmpSl;
+    
+    struct cookie_key ck = {
+        .domain = domain,
+        .path = path,
+        .name = name
+    };
+    sl = soup_cookie_jar_all_cookies(scj);
+    if (sl) {
+        tmpSl = g_slist_find_custom(sl, &ck, _find_cookie);
+        if (tmpSl) {
+            g_string_assign(value, soup_cookie_get_value((SoupCookie*)tmpSl->data));
+        }
+        g_slist_free_full(sl, (GDestroyNotify)soup_cookie_free);
+    }
+}
+
+
+
+
 
