@@ -15,10 +15,13 @@ int main(int argc, char** argv)
 {
     static GWQSession wqs;
 	
+	if (argc != 3) {
+	    GWQ_ERR_OUT(ERR_OUT, "Usage: test <qq number> <password>\n");
+	}
 	g_type_init();
     MainLoop = g_main_loop_new(NULL, TRUE);
 	GWQ_DBG("\n");
-    if (GWQSessionInit(&wqs, "331088042", "zcfzcf215021")) {
+    if (GWQSessionInit(&wqs, argv[1], argv[2])) {
     	GWQ_ERR_OUT(ERR_OUT, "\n");
     }
     GWQSessionLogin(&wqs, _LoginCallback, NULL);
