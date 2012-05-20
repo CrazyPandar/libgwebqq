@@ -30,7 +30,8 @@
 #define LOGOUTPATH          "/channel/logout2"
 #define LOGOUTHOST          PSIDHOST
 
-#define REFERER             "http://"LOGOUTHOST"/proxy.html?v=2010102002"
+#define LOGIN2_REFERER      "http://"PSIDHOST"/proxy.html?v=20101025002"
+#define LOGOUT_REFERER      "http://"PSIDHOST"/proxy.html?v=2010102002"
 
 #define SWQQHOST            "s.web2.qq.com"
 #define GETINFO             "/api/get_friend_info2"

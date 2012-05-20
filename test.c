@@ -1,15 +1,30 @@
 #include "g_webqq.h"
 
 static GMainLoop *MainLoop;
+
+static void logoutCallback(GWQSession* wqs, void* ctx)
+{
+	if (wqs->st != GWQS_ST_OFFLINE) {
+		GWQ_MSG("Logout failed\n");
+		g_main_loop_quit(MainLoop);
+	} else {
+	    GWQ_MSG("Logout success\n");
+        g_main_loop_quit(MainLoop);
+	}
+}
+
 static void _LoginCallback(GWQSession* wqs, void* ctx)
 {
 	GWQ_DBG("==>__LoginCallback()\n");
-	if (wqs->verifyCode) {
-		GWQ_DBG("Got verifyCode:%s\n", wqs->verifyCode->str);
+	if (wqs->st != GWQS_ST_IDLE) {
+		GWQ_MSG("Login failed\n");
+		g_main_loop_quit(MainLoop);
+	} else {
+	    GWQ_MSG("Login success, sleep 2 seconds.\n");
+	    sleep(2);
+	    GWQSessionLogOut(wqs, logoutCallback, ctx);
 	}
-	g_main_loop_quit(MainLoop);
 }
-
 
 int main(int argc, char** argv)
 {
