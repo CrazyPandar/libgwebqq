@@ -16,6 +16,7 @@
 #define VERPATH             "/cgi-bin/ver"
 
 #define LOGINHOST           "ptlogin2.qq.com"
+#define CHECKHOST           "check.ptlogin2.qq.com"
 #define VCCHECKPATH         "/check"
 #define LOGINPATH           "/login"
 

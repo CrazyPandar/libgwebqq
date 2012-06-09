@@ -13,7 +13,8 @@ static void _process_logout_resp(SoupSession *ss, SoupMessage *msg,  gpointer us
 static void soup_cookie_jar_get_cookie_value(SoupCookieJar* scj, 
         const gchar* domain, const gchar* path, const gchar* name, GString* value);
 static void _GWQGenClientId(GWQSession* wqs);
-static int _EncPwdVc(const gchar* passwd, const gchar* vcode, GString *ret);
+static int _EncPwdVc(const gchar* passwd, const gchar* vcode, 
+        guchar* vcUinAry, int vcUinAryLen, GString *ret);
 
 int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
 {
@@ -36,6 +37,7 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
     
     wqs->st = GWQS_ST_OFFLINE;
     wqs->verifyCode = g_string_new("");
+    wqs->vcUin = g_string_new("");
     wqs->clientId = g_string_new("");
     
     wqs->ptcz = g_string_new("");
@@ -63,6 +65,7 @@ ERR_FREE_STRS:
 	g_string_free(wqs->skey, TRUE);
 	g_string_free(wqs->ptcz, TRUE);
 	g_string_free(wqs->clientId, TRUE);
+    g_string_free(wqs->vcUin, TRUE);
 	g_string_free(wqs->verifyCode, TRUE);
 ERR_UNREF_SCJ:
     g_object_unref(wqs->scj);
@@ -85,6 +88,7 @@ int GWQSessionExit(GWQSession* wqs)
 	g_string_free(wqs->ptwebqq, TRUE);
 	g_string_free(wqs->skey, TRUE);
 	g_string_free(wqs->ptcz, TRUE);
+    g_string_free(wqs->vcUin, TRUE);
 	g_string_free(wqs->verifyCode, TRUE);
 	
     g_object_unref(wqs->scj);
@@ -107,7 +111,7 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callb
     }
     str = g_string_new("");
     g_string_printf(str, 
-            "http://"LOGINHOST""VCCHECKPATH"?uin=%s&appid="APPID"&r=%.16f",
+            "http://"CHECKHOST""VCCHECKPATH"?uin=%s&appid="APPID"&r=%.16f",
             wqs->num->str, g_random_double());
     msg = soup_message_new("GET", str->str);
     GWQ_DBG("do check\n");
@@ -121,12 +125,36 @@ ERR_OUT:
     return -1;
 }
 
+inline void CharToDigestChar(unsigned char c, unsigned char* ch, unsigned char* cl)
+{
+    char tmp[3];
+    sprintf(tmp, "%02x", c);
+    *ch = tmp[0];
+    *ch = tmp[1];
+	//*ch = (c>>4) + 0x30;
+	//*cl = (c&0x0F) + 0x30;
+}
+
+inline unsigned char DigestCharToChar(unsigned char ch, unsigned char cl)
+{
+    char tmp[3];
+    unsigned int tmpUint;;
+    
+    tmp[0] = ch;
+    tmp[1] = cl;
+    tmp[2] = '\0';
+    sscanf(tmp, "%x", &tmpUint);
+    return (unsigned char)tmpUint;
+	//return ((ch-0x30)<<4) + (cl-0x30);
+}
+
 static void _process_check_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
 {
     GWQSession *wqs;
     const guint8* data;
     gsize size;
     SoupBuffer *sBuf;
+    int i;
     
     wqs = (GWQSession*)user_data;
     sBuf = soup_message_body_flatten(msg->response_body);
@@ -150,12 +178,33 @@ static void _process_check_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
         			&& tmpCStr < end) {
         		g_string_assign(wqs->verifyCode, "");
         		g_string_append_len(wqs->verifyCode, vc, tmpCStr-vc);
+                GWQ_DBG("vc.verifyCode: %s\n", wqs->verifyCode->str);
         	}
+            if (tmpCStr
+                    && (tmpCStr = g_strstr_len(tmpCStr, size, ","))
+        			&& tmpCStr < end
+        			&& *(++tmpCStr)
+        			&& (tmpCStr = g_strstr_len(tmpCStr, size, "'"))
+        			&& tmpCStr < end
+        			&& *(vc = ++tmpCStr)
+        			&& (tmpCStr = g_strstr_len(tmpCStr, size, "'"))
+        			&& tmpCStr < end) {
+                g_string_assign(wqs->vcUin, "");
+                g_string_append_len(wqs->vcUin, vc, tmpCStr-vc);
+                GWQ_DBG("vc.uin:%s\n", wqs->vcUin->str);
+                wqs->vcUinAryLen = (wqs->vcUin->len)>>2;
+                if (wqs->vcUinAryLen < sizeof(wqs->vcUinAry)) {
+                    for (i=0; i<wqs->vcUinAryLen; i++) {
+                        wqs->vcUinAry[i] = DigestCharToChar(wqs->vcUin->str[(i<<2)+2], wqs->vcUin->str[(i<<2)+3]);
+                        GWQ_DBG("%x\n", wqs->vcUinAry[i]);
+                    }
+                }
+            }
         }
         soup_buffer_free(sBuf);
     }
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->verifyCode->len) {
+    if (wqs->verifyCode->len && wqs->vcUinAryLen < sizeof(wqs->vcUinAry)) {
         if (_GWQSessionDoLogin(wqs)) {
             wqs->st = GWQS_ST_OFFLINE;
             wqs->callBack(wqs, wqs->context);
@@ -176,17 +225,18 @@ static int _GWQSessionDoLogin(GWQSession* wqs)
 	
 	if (wqs->verifyCode->len > 0) {
 		tmpStr = g_string_new("");
-		if (_EncPwdVc(wqs->passwd->str, wqs->verifyCode->str, tmpStr)) {
+		if (_EncPwdVc(wqs->passwd->str, wqs->verifyCode->str, wqs->vcUinAry, wqs->vcUinAryLen, tmpStr)) {
 			GWQ_ERR("\n");
 			g_string_free(tmpStr, TRUE);
 			return -1;
 		}
-		tmpCStr = g_strdup_printf("http://"LOGINHOST""LOGINPATH"?u=%s&p=%s&verifycode=%s&webqq_type=40&"
-				 "remember_uin=0&aid="APPID"&login2qq=1&u1=%s&h=1&"
-				 "ptredirect=0&ptlang=2052&from_ui=1&pttype=1"
-				 "&dumy=&fp=loginerroralert&action=4-30-764935&mibao_css=m_webqq"
-				 , wqs->num->str, tmpStr->str, wqs->verifyCode->str
-				 , LOGIN_S_URL);
+		tmpCStr = g_strdup_printf("http://"LOGINHOST""LOGINPATH"?u=%s&p=%s&verifycode=%s"
+                "&webqq_type=10&remember_uin=1&aid=1003903&login2qq=1&"
+                "u1=http%%3A%%2F%%2Fweb.qq.com%%2Floginproxy.html"
+                "%%3Flogin2qq%%3D1%%26webqq_type%%3D10&h=1&ptredirect=0&"
+                "ptlang=2052&from_ui=1&pttype=1&dumy=&fp=loginerroralert&"
+                "action=2-11-7438&mibao_css=m_webqq&t=1&g=1",
+				 wqs->num->str, tmpStr->str, wqs->verifyCode->str);
 		msg = soup_message_new("GET", tmpCStr);
 		soup_session_queue_message(wqs->sps, msg, _process_login_resp, wqs);
 		g_free(tmpCStr);
@@ -554,49 +604,75 @@ void _GWQGenClientId(GWQSession* wqs)
 	g_string_assign(wqs->clientId, buf);
 }
 
-static int _EncPwdVc(const gchar* passwd, const gchar* vcode, GString *ret)
+/*
+   var M=C.p.value; // M is the qq password
+   var I=hexchar2bin(md5(M)); // Make a md5 digest
+   var H=md5(I+pt.uin); // Make md5 with I and uin
+   var G=md5(H+C.verifycode.value.toUpperCase()); 
+ */
+static int _EncPwdVc(const gchar* passwd, const gchar* vcode, 
+        guchar* vcUinAry, int vcUinAryLen, GString *ret)
 {
 	GChecksum *cs;
 	gint pwdLen;
 	guchar sumBuf[2048];
 	gsize sumBufSize;
 	GString *tmpStr;
-	const gchar *tmpCStr;
+    gchar *tmpCStr;
+    const gchar *tmpCCStr;
+    int i;
 	
+    //vcode = "!D3L";
+    
+    
+    //GWQ_DBG("passwd: %s\n", passwd);
+    GWQ_DBG("vcode: %s\n", vcode);
+    for (i=0; i<vcUinAryLen; i++) {
+        GWQ_DBG("vcUinAry[%d]:%x\n", i , vcUinAry[i]);
+    }
 	if (!passwd || !vcode || !ret) {
 		GWQ_ERR_OUT(ERR_OUT, "\n");
 	}
+    tmpStr = g_string_new("");
 	pwdLen = strlen(passwd);
 	cs = g_checksum_new(G_CHECKSUM_MD5);
 	if (!cs) {
 		GWQ_ERR_OUT(ERR_OUT, "\n");
 	}
-
+    
+    /* var I=hexchar2bin(md5(M)); // Make a md5 digest */
 	g_checksum_update(cs, (const guchar*)passwd, pwdLen);
 	g_checksum_get_digest(cs, sumBuf, &sumBufSize);
+    GWQ_DBG("I\n");
 
-	g_checksum_reset(cs);
-	g_checksum_update(cs, sumBuf, sumBufSize);
-	g_checksum_get_digest(cs, sumBuf, &sumBufSize);
+    /* var H=md5(I+pt.uin); // Make md5 with I and uin */
+    memcpy(sumBuf+sumBufSize, vcUinAry, vcUinAryLen);
+    GWQ_DBG("sumBufSize=%d\n", sumBufSize+vcUinAryLen);
+    g_checksum_reset(cs);
+	g_checksum_update(cs, sumBuf, sumBufSize+vcUinAryLen);
+	tmpCCStr = g_checksum_get_string(cs);
+    GWQ_DBG("H: %s\n", tmpCCStr);
+    //tmpCStr = g_ascii_strup(tmpCStr, strlen(tmpCStr));
 	
-	g_checksum_reset(cs);
-	g_checksum_update(cs, sumBuf, sumBufSize);
-	tmpCStr = g_checksum_get_string(cs);
-	tmpCStr = g_ascii_strup(tmpCStr, strlen(tmpCStr));
-	
-	tmpStr = g_string_new(tmpCStr);
-	g_string_append(tmpStr, vcode);
-	
-	g_checksum_reset(cs);
-	g_checksum_update(cs, (const guchar*)tmpStr->str, tmpStr->len);
-	tmpCStr = g_checksum_get_string(cs);
-	tmpCStr = g_ascii_strup(tmpCStr, strlen(tmpCStr));
-	
+    /* G=md5(H + C.verifycode.value.toUpperCase()); */
+    g_string_assign(tmpStr, tmpCCStr);
+    g_string_append(tmpStr, vcode);
+    tmpCStr = g_ascii_strup(tmpStr->str, tmpStr->len);
+    g_string_assign(tmpStr, tmpCStr);
+    g_free(tmpCStr);
+    GWQ_DBG("H+V: %s\n", tmpStr->str);
+    g_checksum_reset(cs);
+	g_checksum_update(cs, (const guchar *)tmpStr->str, tmpStr->len);
+	tmpCCStr = g_checksum_get_string(cs);
+	tmpCStr = g_ascii_strup(tmpCCStr, strlen(tmpCCStr));
+    	
 	g_string_assign(ret, tmpCStr);
+    g_free(tmpCStr);
 	
 	g_string_free(tmpStr, TRUE);
 	
 	g_checksum_free(cs);
+    GWQ_DBG("p: %s\n", ret->str);
 	return 0;
 ERR_FREE_CS:
 	g_checksum_free(cs);

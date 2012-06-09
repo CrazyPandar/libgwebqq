@@ -54,6 +54,9 @@ struct g_webqq_session {
     
     /* get from check body */
     GString* verifyCode;
+    GString* vcUin;
+    unsigned char vcUinAry[20];
+    int vcUinAryLen;
     
     /* get from login cookies */
     GString* ptcz;
