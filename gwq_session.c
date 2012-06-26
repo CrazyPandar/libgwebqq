@@ -3,7 +3,7 @@
 #include "gwq_util.h"
 #include "gwq_session.h"
 
-int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
+int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, void* context)
 {
     int s_errno;
     
@@ -45,7 +45,7 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
     }
     
     
-    
+    wqs->context = context;
     wqs->st = GWQS_ST_OFFLINE;
     wqs->verifyCode = g_string_new("");
     wqs->vcUin = g_string_new("");

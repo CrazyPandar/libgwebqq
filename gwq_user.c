@@ -69,7 +69,7 @@ ERR_OUT:
 	return -1;
 }
 
-int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx)
+int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback)
 {
 	gchar *tmpCStr = NULL;
 	SoupMessage *msg;
@@ -106,9 +106,7 @@ int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback, gpoi
 	
 	sqlite3_finalize(stmt);
 
-	wqs->st = GWQS_ST_UPDATE_USERS_INFO;
-	wqs->callBack = callback;
-	wqs->context = callbackCtx;
+	wqs->updatUserInfoCallBack = callback;
 	tmpCStr = g_strdup_printf("{\"h\":\"hello\", \"vfwebqq\":\"%s\"}",
 			wqs->vfwebqq->str);
     escaped = g_uri_escape_string(tmpCStr, NULL, FALSE);
@@ -203,8 +201,7 @@ static void _process_get_user_friends2_resp(SoupSession *ss, SoupMessage *msg,  
 
     json_array_foreach_element(ja, _update_user_markname, wqs);
     
-    wqs->st = GWQS_ST_IDLE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->updatUserInfoCallBack(wqs, wqs->context);
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
@@ -216,7 +213,7 @@ ERR_FREE_SBUF:
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     wqs->st = GWQS_ST_IDLE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->updatUserInfoCallBack(wqs, wqs->context);
 }
 
 static void _add_category(JsonArray *array,

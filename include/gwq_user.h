@@ -16,7 +16,7 @@ struct gwq_user_info {
 };
 
 void GWQUserInfoFree(GWQUserInfo* wui);
-int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
+int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback);
 int GWQSessionUpdateUserInfo(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
 GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gchar* qqNum, gint64 qqUin);
 #endif

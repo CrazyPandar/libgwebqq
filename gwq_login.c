@@ -16,7 +16,7 @@ static void _GWQGenClientId(GWQSession* wqs);
 static int _EncPwdVc(const gchar* passwd, const gchar* vcode, 
         guchar* vcUinAry, int vcUinAryLen, GString *ret);
 
-int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx)
+int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* chatStatus)
 {
     SoupMessage *msg;
     GString *str;
@@ -24,6 +24,7 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callb
     if (wqs->st != GWQS_ST_OFFLINE) {
         GWQ_ERR_OUT(ERR_OUT, "\n");
     }
+    wqs->chatSt = chatStatus;
     str = g_string_new("");
     g_string_printf(str, 
             "http://"CHECKHOST""VCCHECKPATH"?uin=%s&appid="APPID"&r=%.16f",
@@ -32,8 +33,7 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callb
     GWQ_DBG("do check\n");
     soup_session_queue_message (wqs->sps, msg, _process_check_resp, wqs);
     g_string_free(str, TRUE);
-    wqs->context = callbackCtx;
-    wqs->callBack = callback;
+    wqs->loginCallBack = callback;
     wqs->st = GWQS_ST_LOGIN;
     return 0;
 ERR_OUT:
@@ -123,7 +123,7 @@ static void _process_check_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
         || wqs->vcUinAryLen > sizeof(wqs->vcUinAry)
         || _GWQSessionDoLogin(wqs)) {
         wqs->st = GWQS_ST_OFFLINE;
-        wqs->callBack(wqs, wqs->context);
+        wqs->loginCallBack(wqs, wqs->context);
     }
 }
 
@@ -249,7 +249,7 @@ ERR_FREE_SBUF:
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     wqs->st = GWQS_ST_OFFLINE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->loginCallBack(wqs, wqs->context);
 }
 
 static int _GWQSessionDoLogin2(GWQSession* wqs)
@@ -264,7 +264,7 @@ static int _GWQSessionDoLogin2(GWQSession* wqs)
 	tmpCStr = g_strdup_printf("{\"status\":\"%s\",\"ptwebqq\":\"%s\","
 			"\"passwd_sig\":""\"\",\"clientid\":\"%s\""
 			", \"psessionid\":null}",
-			GWQS_CHAT_ST_HIDDEN, wqs->ptwebqq->str,
+			wqs->chatSt, wqs->ptwebqq->str,
 			wqs->clientId->str);
     escaped = g_uri_escape_string(tmpCStr, NULL, FALSE);
     g_free(tmpCStr);
@@ -347,7 +347,7 @@ static void _process_login2_resp(SoupSession *ss, SoupMessage *msg,  gpointer us
     wqs->port = json_object_get_int_member(jo, "port");
     
     wqs->st = GWQS_ST_IDLE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->loginCallBack(wqs, wqs->context);
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
@@ -359,10 +359,10 @@ ERR_FREE_SBUF:
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     wqs->st = GWQS_ST_OFFLINE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->loginCallBack(wqs, wqs->context);
 }
 
-int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx)
+int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback)
 {
     SoupMessage *msg;
     GString *str;
@@ -379,8 +379,7 @@ int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback, gpointer call
     GWQ_DBG("do logout\n");
     soup_session_queue_message (wqs->sps, msg, _process_logout_resp, wqs);
     g_string_free(str, TRUE);
-    wqs->context = callbackCtx;
-    wqs->callBack = callback;
+    wqs->loginCallBack = callback;
     wqs->st = GWQS_ST_LOGOUT;
     return 0;
 ERR_OUT:
@@ -439,7 +438,7 @@ static void _process_logout_resp(SoupSession *ss, SoupMessage *msg,  gpointer us
     }
     
     wqs->st = GWQS_ST_OFFLINE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->loginCallBack(wqs, wqs->context);
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
@@ -451,7 +450,7 @@ ERR_FREE_SBUF:
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     wqs->st = GWQS_ST_IDLE;
-    wqs->callBack(wqs, wqs->context);
+    wqs->loginCallBack(wqs, wqs->context);
 }
 
 struct cookie_key {

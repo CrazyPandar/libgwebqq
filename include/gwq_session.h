@@ -6,13 +6,14 @@
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
 #include "g_qqhosts.h"
+#include "gwq_recvmsg.h"
 
 #define WQ_QQ_NUM_MAX_LEN   20
 #define WQ_QQ_PASSWORD_MAX_LEN  50
 typedef struct g_webqq_session GWQSession;
 
 typedef void(*GWQSessionCallback)(GWQSession* wqs, void* context);
-typedef void(*MessageRecievedFunc)(GWQSession* wqs, void*ctx);
+typedef void(*MessageRecievedFunc)(GWQSession* wqs, QQRecvMsg* msg);
 
 struct g_webqq_session {
     SoupSession *sps;
@@ -22,13 +23,12 @@ struct g_webqq_session {
         GWQS_ST_LOGIN,
         GWQS_ST_IDLE,
         GWQS_ST_LOGOUT,
-        GWQS_ST_RECV_MSG,
-        GWQS_ST_UPDATE_USERS_INFO
     }st;
     GString* num;
     GString* passwd;
     void* context;
-    GWQSessionCallback callBack;
+    GWQSessionCallback loginCallBack;
+    GWQSessionCallback updatUserInfoCallBack;
     enum {
         GWQ_ERR_NO_ERROR,
         GWQ_ERR_SERVER_BUSY,
@@ -74,14 +74,15 @@ struct g_webqq_session {
     MessageRecievedFunc messageRecieved;
 };
 
-#define GWQS_CHAT_ST_HIDDEN "hidden"
+#define GWQ_CHAT_ST_HIDDEN "hidden"
+#define GWQ_CHAT_ST_ONLINE "online"
 
-int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd);
+int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, void* context);
 
 int GWQSessionExit(GWQSession* wqs);
 
-int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
-int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
+int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* chatStatus);
+int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback);
 int GWQSessionDoPoll(GWQSession* wqs,
         MessageRecievedFunc messageRecieved);
 #endif
