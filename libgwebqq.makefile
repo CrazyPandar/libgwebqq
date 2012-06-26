@@ -25,6 +25,9 @@ LIBSOUP_LIBS ?= $(shell pkg-config --libs libsoup-2.4)
 
 JSON_GLIB_CFLAGS ?= $(shell pkg-config --cflags json-glib-1.0)
 JSON_GLIB_LIBS ?= $(shell pkg-config --libs json-glib-1.0)
+
+SQLITE3_CFLAGS ?= $(shell pkg-config --cflags sqlite3)
+SQLITE3_LIBS ?= $(shell pkg-config --libs sqlite3)
 #####################################################
 ifeq ($(OS), WIN32)
 TARGET = libgwebqq.dll
@@ -32,11 +35,10 @@ else
 TARGET = libgwebqq.so
 endif
 
-OBJS = g_webqq.o gwq_login.o
+OBJS = gwq_util.o gwq_session.o gwq_login.o gwq_user.o gwq_poll.o gwq_recvmsg.o gwq_sendmsg.o
 
-CFLAGS +=  -I./include -fPIC $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS) $(JSON_GLIB_CFLAGS)
-LDFLAGS += -Wl,-soname -Wl,$(TARGET) -shared -lm -lcrypt $(GLIB_LIBS) $(LIBSOUP_LIBS) $(JSON_GLIB_LIBS)
-
+CFLAGS +=  -I./include -fPIC $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS) $(JSON_GLIB_CFLAGS) $(SQLITE3_CFLAGS)
+LDFLAGS += -Wl,-soname -Wl,$(TARGET) -shared -lm -lcrypt $(GLIB_LIBS) $(LIBSOUP_LIBS) $(JSON_GLIB_LIBS) $(SQLITE3_LIBS)
 #####################################################
 
 all:$(TARGET)

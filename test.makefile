@@ -22,12 +22,15 @@ GLIB_LIBS ?= $(shell pkg-config --libs glib-2.0)
 
 LIBSOUP_CFLAGS ?= $(shell pkg-config --cflags libsoup-2.4)
 LIBSOUP_LIBS ?= $(shell pkg-config --libs libsoup-2.4)
+
+JSON_GLIB_CFLAGS ?= $(shell pkg-config --cflags json-glib-1.0)
+JSON_GLIB_LIBS ?= $(shell pkg-config --libs json-glib-1.0)
 ###########################################################
 TARGET = test
 OBJS = test.o
 
-CFLAGS += -I./include $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS) 
-LDFLAGS += -lm -lcrypt $(GLIB_LIBS) $(LIBSOUP_LIBS) -L. -lgwebqq
+CFLAGS += -I./include $(GLIB_CFLAGS) $(LIBSOUP_CFLAGS) $(JSON_GLIB_CFLAGS)
+LDFLAGS += -lm -lcrypt $(GLIB_LIBS) $(LIBSOUP_LIBS) $(JSON_GLIB_LIBS) -L. -lgwebqq
 ###########################################################
 
 all:$(TARGET)

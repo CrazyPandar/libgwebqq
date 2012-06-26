@@ -16,91 +16,6 @@ static void _GWQGenClientId(GWQSession* wqs);
 static int _EncPwdVc(const gchar* passwd, const gchar* vcode, 
         guchar* vcUinAry, int vcUinAryLen, GString *ret);
 
-int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd)
-{
-	if (!qqNum || !passwd) {
-		GWQ_ERR_OUT(ERR_OUT, "\n");
-	}
-	
-    wqs->num = g_string_new(qqNum);
-    wqs->passwd = g_string_new(passwd);
-    
-    if (!(wqs->sps = soup_session_async_new_with_options(NULL, NULL))) {
-        GWQ_ERR_OUT(ERR_FREE_PASSWD, "\n");
-    }
-    
-    if (!(wqs->scj = soup_cookie_jar_new())) {
-        GWQ_ERR_OUT(ERR_UNREF_SPS, "\n");
-    }
-    
-    soup_session_add_feature(wqs->sps, SOUP_SESSION_FEATURE(wqs->scj));
-    
-    wqs->st = GWQS_ST_OFFLINE;
-    wqs->verifyCode = g_string_new("");
-    wqs->vcUin = g_string_new("");
-    wqs->clientId = g_string_new("");
-    
-    wqs->ptcz = g_string_new("");
-	wqs->skey = g_string_new("");
-	wqs->ptwebqq = g_string_new("");
-	wqs->ptuserinfo = g_string_new("");
-    wqs->uin = g_string_new("");
-    wqs->ptisp = g_string_new("");
-    wqs->pt2gguin = g_string_new("");
-    
-    wqs->vfwebqq = g_string_new("");
-    wqs->psessionid = g_string_new("");
-    wqs->index = -1;
-    wqs->port = -1;
-    return 0;
-ERR_FREE_STRS:
-    g_string_free(wqs->psessionid, TRUE);    
-    g_string_free(wqs->vfwebqq, TRUE);
-    
-	g_string_free(wqs->pt2gguin, TRUE);
-	g_string_free(wqs->ptisp, TRUE);
-	g_string_free(wqs->uin, TRUE);
-	g_string_free(wqs->ptuserinfo, TRUE);
-	g_string_free(wqs->ptwebqq, TRUE);
-	g_string_free(wqs->skey, TRUE);
-	g_string_free(wqs->ptcz, TRUE);
-	g_string_free(wqs->clientId, TRUE);
-    g_string_free(wqs->vcUin, TRUE);
-	g_string_free(wqs->verifyCode, TRUE);
-ERR_UNREF_SCJ:
-    g_object_unref(wqs->scj);
-ERR_UNREF_SPS:
-    g_object_unref(wqs->sps);
-ERR_FREE_PASSWD:
-	g_string_free(wqs->num, TRUE);
-ERR_FREE_NUM:
-	g_string_free(wqs->passwd, TRUE);
-ERR_OUT:
-    return -1;
-}
-
-int GWQSessionExit(GWQSession* wqs)
-{
-	g_string_free(wqs->pt2gguin, TRUE);
-	g_string_free(wqs->ptisp, TRUE);
-	g_string_free(wqs->uin, TRUE);
-	g_string_free(wqs->ptuserinfo, TRUE);
-	g_string_free(wqs->ptwebqq, TRUE);
-	g_string_free(wqs->skey, TRUE);
-	g_string_free(wqs->ptcz, TRUE);
-    g_string_free(wqs->vcUin, TRUE);
-	g_string_free(wqs->verifyCode, TRUE);
-	
-    g_object_unref(wqs->scj);
-    
-    g_object_unref(wqs->sps);
-    
-	g_string_free(wqs->num, TRUE);
-
-	g_string_free(wqs->passwd, TRUE);
-    return 0;
-}
-
 int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx)
 {
     SoupMessage *msg;
@@ -204,12 +119,9 @@ static void _process_check_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
         soup_buffer_free(sBuf);
     }
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->verifyCode->len && wqs->vcUinAryLen < sizeof(wqs->vcUinAry)) {
-        if (_GWQSessionDoLogin(wqs)) {
-            wqs->st = GWQS_ST_OFFLINE;
-            wqs->callBack(wqs, wqs->context);
-        }
-    } else {
+    if (wqs->verifyCode->len <=0 
+        || wqs->vcUinAryLen > sizeof(wqs->vcUinAry)
+        || _GWQSessionDoLogin(wqs)) {
         wqs->st = GWQS_ST_OFFLINE;
         wqs->callBack(wqs, wqs->context);
     }
