@@ -1,0 +1,13 @@
+V0.0.1
+======
+working:
+    Login
+    Logout
+    Receive buddy message
+    Send buddy message
+
+Not working:
+    Receive group message
+    Send group message
+    Save message
+

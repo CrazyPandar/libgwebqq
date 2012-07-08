@@ -1,0 +1,20 @@
+Libgwebqq
+=========
+libgwebqq is a qq client library uses webqq protocol.
+It uses benefits from glib's async event process infrastructure.
+
+Requirements
+============
+libgwebqq depends on glib, json-glib, libsoup and sqlite3.
+
+License
+========
+libgwebqq is a free software released under LGPL.
+
+Build and Test
+==============
+$git clone git://github.com/CrazyPandar/libgwebqq.git
+$cd libgwebqq
+$make
+$./test.sh <qq number> <password> <qqNUm for sending test message>
+#make install
