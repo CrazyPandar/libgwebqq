@@ -18,12 +18,14 @@ void GWQAsciiToUtf8(const gchar* from, GString* to)
     int len;
     
     gchar tmpCStr[8];
+    GWQ_DBG("==>GWQAsciiToUtf8()\n");
     for(c = from; *c != '\0'; ++c){
         if(*c == '\\' && *(c + 1) == 'u') {
             sscanf(c, "\\u%"G_GINT32_FORMAT"X", &uc);
             len = g_unichar_to_utf8(uc, tmpCStr);
+            GWQ_DBG("unicode:%lld\n", (long long int)uc);
             g_string_append_len(to, tmpCStr, len);
-        }else{
+        } else {
             g_string_append_c(to, *c);
             continue;
         }

@@ -46,6 +46,7 @@ static void _update_user_markname(JsonArray *array,
 
 void GWQUserInfoFree(GWQUserInfo* wui)
 {
+    GWQ_DBG("==>GWQUserInfoFree\n");
 	g_string_free(wui->nick, TRUE);
 	g_string_free(wui->markname, TRUE);
 	g_free(wui);
@@ -395,9 +396,9 @@ GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gchar* qqNum, gint64 q
 	const guchar *tmpCCStr;
 	
 	if (qqNum) {
-		cmdStr = g_strdup_printf("select from users where qqNum=%s", qqNum);
+		cmdStr = g_strdup_printf("select * from users where qqNum=%s", qqNum);
 	} else if (qqUin > 0) {
-		cmdStr = g_strdup_printf("select from users where qqUin=%"G_GINT64_FORMAT, qqUin);
+		cmdStr = g_strdup_printf("select * from users where uin=%"G_GINT64_FORMAT, qqUin);
 	} else {
 		GWQ_ERR_OUT(ERR_OUT, "\n");
 	}

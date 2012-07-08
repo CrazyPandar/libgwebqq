@@ -89,13 +89,12 @@ enum _QQMsgType{
 //
 struct _QQSendMsg{
     QQMsgType type;         // 0 this is buddy message, or 1 is group message.
-    GString *to_uin;        // If buddy msg, this is "to"
+    gint64 to_uin;        // If buddy msg, this is "to"
                             // If group msg, this is "group_uin"
-    GString *face;          // Only used when this is buddy message.
-
+                            
     GPtrArray *contents;    // Message contents. An array of QQMsgContent.
 };
-QQSendMsg* qq_sendmsg_new(QQMsgType type, const gchar *to_uin);
+QQSendMsg* qq_sendmsg_new(QQMsgType type, gint64 to_uin);
 void qq_sendmsg_free(QQSendMsg *msg);
 void qq_sendmsg_add_content(QQSendMsg *msg, QQMsgContent *content);
 //

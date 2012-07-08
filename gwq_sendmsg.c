@@ -211,6 +211,43 @@ GString* qq_msgcontent_tostring(QQMsgContent *cnt)
     return str;
 }
 
+QQSendMsg* qq_sendmsg_new(QQMsgType type, const gint64 to_uin)
+{
+    QQSendMsg *msg = g_slice_new0(QQSendMsg);
+
+    if(msg == NULL){
+        g_warning("OOM...(%s, %d)", __FILE__, __LINE__);
+        return NULL;
+    }
+    
+    msg -> contents = g_ptr_array_new();
+    if(msg -> contents == NULL){
+        g_warning("OOM...(%s, %d)", __FILE__, __LINE__);
+        g_slice_free(QQSendMsg, msg);
+        return NULL;
+    }
+    
+    msg->to_uin = to_uin;
+    
+    msg->type = type;
+    
+    return msg;
+}
+
+void qq_sendmsg_free(QQSendMsg *msg)
+{
+    if(msg == NULL){
+        return;
+    }
+
+    guint i;
+    for(i = 0; i < msg -> contents -> len; ++i){
+        qq_msgcontent_free(
+                (QQMsgContent*)g_ptr_array_index(msg -> contents, i));
+    }
+    g_slice_free(QQSendMsg, msg);
+}
+
 void qq_sendmsg_add_content(QQSendMsg *msg, QQMsgContent *content)
 {
     if(msg == NULL || msg -> contents == NULL){
@@ -278,13 +315,19 @@ r={
 	"psessionid":"8368046764001e636f6e6e7365727..."
 }
  */
-
-int GWQSessionSendMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm)
+static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent)
 {
     gchar *req;
     GWQUserInfo *wui;
     GString *cnts;
-    static long int msg_id;
+    static int msg_id;
+    gchar *tmpCStr, *escaped;
+    
+    if (wqs->st != GWQS_ST_IDLE ||
+        wqs->sendMsgSt != SEND_MSG_IDLE) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
     
     if (!(wui = GWQSessionGetUserInfo(wqs, NULL, toUin))) {
         GWQ_ERR_OUT(ERR_OUT, "user no found\n");
@@ -294,19 +337,41 @@ int GWQSessionSendMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm)
         GWQ_ERR_OUT(ERR_FREE_WUI, "gen msg contents failed\n");
     }
     
+    wqs->messageSent =msgSent;
+    wqs->msgToSent = qsm;
+
+    wqs->sendMsg = soup_message_new("POST", "http://d.web2.qq.com/channel/send_buddy_msg2");
+    
     req = g_strdup_printf("{"
-            "\"to\":%"G_GINT64_FORMAT,
+            "\"to\":%"G_GINT64_FORMAT","
             "\"face\":%d,"
             "%s,"
             "\"msg_id\":%d,"
             "\"clientid\":\"%s\","
             "\"psessionid\":\"%s\""
-        "}", 
+        "}&clientid=%s&psessionid=%s", 
+        
         toUin, wui->face, cnts->str, 
         msg_id++, 
         wqs->clientId->str,
+        wqs->psessionid->str,
+        wqs->clientId->str,
         wqs->psessionid->str);
-    GWQ_ERR("Fix me: GWQSessionSendMsg() not implement yet!!!");
+    
+    escaped = g_uri_escape_string(req, NULL, FALSE);
+    g_free(req);
+    
+    tmpCStr = g_strdup_printf("r=%s", escaped);
+    g_free(escaped);
+    
+    soup_message_set_request (wqs->sendMsg, "application/x-www-form-urlencoded",
+              SOUP_MEMORY_COPY, tmpCStr, strlen(tmpCStr));
+    soup_message_headers_append (wqs->sendMsg->request_headers, "Referer", 
+            " http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"); /* this is must */
+    g_free(tmpCStr);
+	soup_session_queue_message(wqs->sps, wqs->sendMsg, _process_sendBuddyMsg_resp, wqs);
+    //GWQUserInfoFree(wui);
+    wqs->sendMsgSt = SEND_MSG_ING;
     return 0;
 ERR_FREE_CNTS:
     g_string_free(cnts, TRUE);
@@ -314,4 +379,68 @@ ERR_FREE_WUI:
     GWQUserInfoFree(wui);
 ERR_OUT:
     return -1;
+}
+
+
+static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
+{
+    GWQSession *wqs;
+    const guint8* data;
+    const gchar* tmpCStr;
+    gsize size;
+    SoupBuffer *sBuf;
+    JsonParser *jParser;
+    JsonNode *jn;
+    JsonObject *jo;
+    gint32 tmpInt;
+    JsonArray *resJa;
+    
+    wqs = (GWQSession*)user_data;
+    
+    wqs->sendMsgSt = SEND_MSG_IDLE;
+    GWQ_DBG("poll responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (msg->status_code != 200) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    
+    sBuf = soup_message_body_flatten(msg->response_body);
+    if (!sBuf) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    soup_buffer_get_data(sBuf, &data, &size);
+    if (!data || size <=0 ) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+    
+    if (!(jParser = json_parser_new())) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    
+    resJa = NULL;
+    if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
+        GWQ_ERR("\n");
+    } else if (!(jn = json_parser_get_root(jParser))
+            || !(jo = json_node_get_object(jn))) {
+        GWQ_ERR("\n");
+    } else if ((tmpInt = json_object_get_int_member(jo, "retcode"))) {
+        GWQ_ERR("sendMsg retcode=%d\n", tmpInt);
+    }
+    if (!(tmpCStr = json_object_get_string_member(jo, "result"))) {
+        GWQ_ERR("sendMsg returned result: %s\n", tmpCStr);
+    } 
+    
+    wqs->messageSent(wqs, wqs->msgToSent, tmpInt);
+    
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    return;
+ERR_FREE_J_PARSER:
+    g_object_unref(jParser);
+ERR_FREE_SBUF:
+    soup_buffer_free(sBuf);
+ERR_OUT:
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
 }

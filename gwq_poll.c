@@ -11,7 +11,6 @@ int GWQSessionDoPoll(GWQSession* wqs,
         MessageRecievedFunc messageRecieved)
 {
     gchar *tmpCStr, *escaped;
-    SoupURI *su;
     
     if (wqs->st != GWQS_ST_IDLE) {
         GWQ_ERR_OUT(ERR_OUT, "\n");
@@ -19,16 +18,10 @@ int GWQSessionDoPoll(GWQSession* wqs,
     
     wqs->messageRecieved =messageRecieved;
     
-    tmpCStr = g_strdup_printf("clientid=%s&psessionid=%s&t=%ld", 
+    tmpCStr = g_strdup_printf("http://d.web2.qq.com/channel/poll2?clientid=%s&psessionid=%s&t=%ld", 
         wqs->clientId->str, wqs->psessionid->str, GetNowMillisecond()
     );
-    wqs->pollMsg = soup_message_new("POST", "http://d.web2.qq.com");
-    su = soup_message_get_uri(wqs->pollMsg);
-    soup_uri_set_scheme(su, SOUP_URI_SCHEME_HTTP);
-    soup_uri_set_host(su, "d.web2.qq.com");
-    soup_uri_set_path(su, "/channel/poll2");
-    soup_uri_set_query(su, tmpCStr);
-    //soup_message_set_uri(wqs->pollMsg, tmpCStr);
+    wqs->pollMsg = soup_message_new("POST", tmpCStr);
     g_free(tmpCStr);
     
     tmpCStr = g_strdup_printf("{\"clientid\":\"%s\","
@@ -117,7 +110,8 @@ static void _process_poll_resp(SoupSession *ss, SoupMessage *msg,  gpointer user
 
     g_free(tmpCStr);
     GWQ_ERR("Fix me : why soup_session_requeue_message() fails here!!!!!!!!!!!!!!!!!!!!!\n");
-    soup_session_requeue_message(wqs->sps, wqs->pollMsg);
+    //soup_session_requeue_message(wqs->sps, msg);
+    GWQSessionDoPoll(wqs, wqs->messageRecieved);
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);

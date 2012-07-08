@@ -92,23 +92,22 @@ void qq_recvmsg_free(QQRecvMsg *msg)
 
 static void parase_content(QQRecvMsg *msg, JsonNode *jn)
 {
-    GString *utf8 = g_string_new("");
     GString *tmpstring = g_string_new("");
     gint i;
     JsonNodeType jnt;
     QQMsgContent *ct = NULL;
+    const gchar* tmpCStr;
     
     jnt = json_node_get_node_type(jn);
         if(jnt == JSON_NODE_VALUE){
             //String
-            g_string_truncate(utf8, 0);
             g_string_truncate(tmpstring, 0);
             
-            GWQAsciiToUtf8(json_node_get_string(jn), utf8);
+            tmpCStr = json_node_get_string(jn);
 
-            for(i = 0; i < utf8 -> len; ++i){
-                if(utf8 -> str[i] == '\\' && i + 1 < utf8 -> len){
-                    switch(utf8 -> str[i + 1])
+            for(i = 0; tmpCStr[i]; ++i){
+                if(tmpCStr[i] == '\\' && tmpCStr[i+1] != '\0'){
+                    switch(tmpCStr[i+1])
                     {
                     case '\\':
                         g_string_append_c(tmpstring, '\\');
@@ -130,12 +129,12 @@ static void parase_content(QQRecvMsg *msg, JsonNode *jn)
                     }
                     ++i;
                 }else{
-                    g_string_append_c(tmpstring, utf8 -> str[i]);
+                    g_string_append_c(tmpstring, tmpCStr[i]);
                 }
             }
             ct = qq_msgcontent_new(QQ_MSG_CONTENT_STRING_T, tmpstring -> str); 
             qq_recvmsg_add_content(msg, ct);
-            g_debug("Msg Content: string %s(%s, %d)", utf8 -> str
+            g_debug("Msg Content: string %s(%s, %d)", tmpCStr
                             , __FILE__, __LINE__);
         }else if(jnt == JSON_NODE_ARRAY){
             JsonArray *ja, *styleAry;
@@ -155,9 +154,7 @@ static void parase_content(QQRecvMsg *msg, JsonNode *jn)
                     g_warning("No font name found!(%s, %d)", __FILE__, __LINE__);
                     name = "Arial";
                 }
-                //g_string_truncate(utf8, 0);
-                //ucs4toutf8(utf8, name);
-                //name = utf8 -> str;
+
                 //font color
                 color = json_object_get_string_member(fontObj, "color");
                 if(color == NULL){
@@ -198,7 +195,6 @@ static void parase_content(QQRecvMsg *msg, JsonNode *jn)
             g_warning("Unknown content!(%s, %d)", __FILE__, __LINE__);
         }
 
-    g_string_free(utf8, TRUE);
     g_string_free(tmpstring, TRUE);
 }
 

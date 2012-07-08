@@ -47,6 +47,7 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
     
     wqs->context = context;
     wqs->st = GWQS_ST_OFFLINE;
+    wqs->sendMsgSt =SEND_MSG_IDLE;
     wqs->verifyCode = g_string_new("");
     wqs->vcUin = g_string_new("");
     wqs->clientId = g_string_new("");

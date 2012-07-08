@@ -7,6 +7,7 @@
 #include <json-glib/json-glib.h>
 #include "g_qqhosts.h"
 #include "gwq_recvmsg.h"
+#include "gwq_sendmsg.h"
 
 #define WQ_QQ_NUM_MAX_LEN   20
 #define WQ_QQ_PASSWORD_MAX_LEN  50
@@ -14,6 +15,7 @@ typedef struct g_webqq_session GWQSession;
 
 typedef void(*GWQSessionCallback)(GWQSession* wqs, void* context);
 typedef void(*MessageRecievedFunc)(GWQSession* wqs, QQRecvMsg* msg);
+typedef void(*MessageSentFunc)(GWQSession* wqs, QQSendMsg* msg, gint32 retCode);
 
 struct g_webqq_session {
     SoupSession *sps;
@@ -72,6 +74,15 @@ struct g_webqq_session {
     /* poll implementation */
     SoupMessage* pollMsg;
     MessageRecievedFunc messageRecieved;
+    
+    /* send msg */
+    enum {
+        SEND_MSG_IDLE,
+        SEND_MSG_ING
+    }sendMsgSt;
+    SoupMessage* sendMsg;
+    QQSendMsg* msgToSent;
+    MessageSentFunc messageSent;
 };
 
 #define GWQ_CHAT_ST_HIDDEN "hidden"
@@ -85,4 +96,5 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* c
 int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback);
 int GWQSessionDoPoll(GWQSession* wqs,
         MessageRecievedFunc messageRecieved);
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent);
 #endif
