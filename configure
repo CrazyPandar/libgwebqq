@@ -1,0 +1,17 @@
+#!/bin/bash
+#CC=gcc [default gcc]
+
+echo 'ifneq ($(CONFIG_INCLUDED), yes)'>config.mk
+echo 'CONFIG_INCLUDED=yes' >>config.mk
+echo >>config.mk
+
+echo -n "" >> config.mk
+until [ -z "$1" ]  # Until all parameters used up . . .
+do
+  echo "$1" >> config.mk
+  shift
+done
+
+echo >>config.mk
+echo 'endif' >>config.mk
+
