@@ -35,7 +35,7 @@ void messageRecieved(GWQSession* wqs, QQRecvMsg* msg)
             GWQ_MSG("uin=%"G_GINT64_FORMAT", status:%s\n", msg->uin, msg->status->str);
             break;
         case MSG_BUDDY_T:
-            GWQ_MSG("[%"G_GINT64_FORMAT"]\n", msg->uin);
+            GWQ_MSG("[%"G_GINT64_FORMAT"]\n", msg->from_uin);
             g_ptr_array_foreach(msg->contents, _DisplayMsg, wqs);
         default:
             GWQ_MSG("Unknown message type received\n");
