@@ -3,6 +3,7 @@
 #include "gwq_user.h"
 
 static GMainLoop *MainLoop;
+static gint64 QQNumForTestMsg;
 
 static void logoutCallback(GWQSession* wqs, void* ctx)
 {
@@ -61,9 +62,7 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
     GWQSessionDoPoll(wqs, messageRecieved);
     
     GWQ_DBG("Start sending test message\n");
-    qsm = qq_sendmsg_new(MSG_BUDDY_T, 2395008827LL);  /* qsm should be freed with qq_sendmsg_free!! */
-    //qmc = qq_msgcontent_new(QQ_MSG_CONTENT_STRING_T, "test from libgwebqq\n");
-    //qq_sendmsg_add_content(qsm, qmc);
+    qsm = qq_sendmsg_new(MSG_BUDDY_T, QQNumForTestMsg);  /* qsm should be freed with qq_sendmsg_free!! */
 
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_STRING_T, "来自<libgwebqq>的测试\n");
     qq_sendmsg_add_content(qsm, qmc);
@@ -72,7 +71,7 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FONT_T, "宋体", 12, "000000", 0,0,0);
     qq_sendmsg_add_content(qsm, qmc);
 
-    if (GWQSessionSendBuddyMsg(wqs, 2395008827LL, qsm, messageSentHndl)) {
+    if (GWQSessionSendBuddyMsg(wqs, QQNumForTestMsg, -1LL, qsm, messageSentHndl)) {
         GWQ_ERR("Sent failed, BUSY sending message, please try later\n");
     }
 }
@@ -85,6 +84,7 @@ static void _LoginCallback(GWQSession* wqs, void* ctx)
 		g_main_loop_quit(MainLoop);
 	} else {
 	    GWQ_MSG("Login successfully\n");
+        GWQ_MSG("Fetching buddies' information, please wait......\n");
         GWQSessionUpdateUsersInfo(wqs, _UpdateUsersInfoCallback);
 	}
 }
@@ -99,8 +99,8 @@ int main(int argc, char** argv)
 {
 
 	
-	if (argc != 3) {
-	    GWQ_ERR_OUT(ERR_OUT, "Usage: test <qq number> <password>\n");
+	if (argc != 4) {
+	    GWQ_ERR_OUT(ERR_OUT, "Usage: test <qq number> <password> <qqNUm for sending test message>\n");
 	}
     
     signal(SIGINT, _sig_term_hndl);
@@ -111,6 +111,7 @@ int main(int argc, char** argv)
     if (GWQSessionInit(&Wqs, argv[1], argv[2], &Wqs)) {
     	GWQ_ERR_OUT(ERR_OUT, "\n");
     }
+    QQNumForTestMsg = g_ascii_strtoll(argv[3], NULL, 10);
     GWQSessionLogin(&Wqs, _LoginCallback, GWQ_CHAT_ST_HIDDEN);
 	
     g_main_loop_run(MainLoop);

@@ -7,7 +7,7 @@
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
 
-#define _DEBUG_
+//#define _DEBUG_
 #ifdef _DEBUG_
 #define GWQ_DBG(...) {g_printf("[D][%s:%d]", __FILE__, __LINE__);g_printf(__VA_ARGS__);}
 #else

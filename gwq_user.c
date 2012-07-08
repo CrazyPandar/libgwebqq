@@ -25,7 +25,7 @@ static void _update_user_markname(JsonArray *array,
  * 
  * friends table
  * =============
- * uin(uint64)	qqNum(string)	nick(string)	markname(string)	face(uint32)	category(uint32)	flag(uint32) online(uint32)
+ * uin(int64)	qqNum(int64)	nick(string)	markname(string)	face(uint32)	category(uint32)	flag(uint32) online(uint32)
  * 
  * category table
  * ==============
@@ -49,7 +49,7 @@ void GWQUserInfoFree(GWQUserInfo* wui)
     GWQ_DBG("==>GWQUserInfoFree\n");
 	g_string_free(wui->nick, TRUE);
 	g_string_free(wui->markname, TRUE);
-	g_free(wui);
+	g_slice_free(GWQUserInfo, wui);
 }
 
 int sqlite3_prepare_step_finalize(sqlite3* sql, const gchar* cmdStr)
@@ -69,6 +69,124 @@ int sqlite3_prepare_step_finalize(sqlite3* sql, const gchar* cmdStr)
 ERR_OUT:
 	return -1;
 }
+
+static void _process_get_qq_num_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
+int GWQSessionUpdateQQNumByUin(GWQSession* wqs, gint64 uin)
+{
+    SoupMessage *msg;
+    GString *str;
+    
+    if (wqs->st != GWQS_ST_IDLE) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    str = g_string_new("");
+    g_string_printf(str, 
+            "http://s.web2.qq.com/api/get_friend_uin2?tuin=%"G_GINT64_FORMAT
+            "&verifysession=&type=1&code=&vfwebqq=%s&t=%"G_GINT32_FORMAT,
+            uin,
+            wqs->vfwebqq->str, 
+            g_random_int());
+    
+    GWQ_DBG("GET %s\n", str->str);
+    msg = soup_message_new("GET", str->str);
+    soup_message_headers_append (msg->request_headers, "Referer", 
+            "http://s.web2.qq.com/proxy.html?v=20101025002"); /* this is must */
+    soup_session_queue_message (wqs->sps, msg, _process_get_qq_num_resp, wqs);
+    wqs->updateQQNumCount++;
+    g_string_free(str, TRUE);
+
+    return 0;
+ERR_OUT:
+    return -1;
+}
+
+
+static void _process_get_qq_num_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
+{
+    GWQSession *wqs;
+    const guint8* data;
+    gsize size;
+    SoupBuffer *sBuf;
+    JsonParser *jParser;
+    JsonNode *jn;
+    JsonObject *jo;
+    gint64 uin, qqNum;
+    gchar *cmd;
+    
+    wqs = (GWQSession*)user_data;
+    wqs->updateQQNumCount--;
+    GWQ_DBG("GWQSessionUpdateQQNumByUin responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (msg->status_code != 200) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    
+    sBuf = soup_message_body_flatten(msg->response_body);
+    if (!sBuf) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    soup_buffer_get_data(sBuf, &data, &size);
+    if (!data || size <=0 ) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+    
+    if (!(jParser = json_parser_new())) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    
+    if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jn = json_parser_get_root(jParser))
+            || !(jo = json_node_get_object(jn))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (0 != json_object_get_int_member(jo, "retcode")) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jo = json_object_get_object_member(jo, "result"))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if ((qqNum = json_object_get_int_member(jo, "account")) <= 0) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if ((uin = json_object_get_int_member(jo, "uin")) <= 0) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+	cmd = g_strdup_printf("update users set qqNum=%"G_GINT64_FORMAT" "
+			"where uin=%"G_GINT64_FORMAT,
+			qqNum, uin);
+	GWQ_DBG("%s\n", cmd);
+	if (!cmd) {
+		GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+	}
+	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
+	g_free(cmd);
+    
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    if (wqs->updateQQNumCount == 0)
+        wqs->updatUserInfoCallBack(wqs, wqs->context);
+    return;
+ERR_FREE_J_PARSER:
+    g_object_unref(jParser);
+ERR_FREE_SBUF:
+    soup_buffer_free(sBuf);
+ERR_OUT:
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    if (wqs->updateQQNumCount == 0)
+        wqs->updatUserInfoCallBack(wqs, wqs->context);
+}
+
 
 int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback)
 {
@@ -202,10 +320,11 @@ static void _process_get_user_friends2_resp(SoupSession *ss, SoupMessage *msg,  
 
     json_array_foreach_element(ja, _update_user_markname, wqs);
     
-    wqs->updatUserInfoCallBack(wqs, wqs->context);
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    if (wqs->updateQQNumCount == 0)
+        wqs->updatUserInfoCallBack(wqs, wqs->context);
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);
@@ -213,8 +332,8 @@ ERR_FREE_SBUF:
     soup_buffer_free(sBuf);
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    wqs->st = GWQS_ST_IDLE;
-    wqs->updatUserInfoCallBack(wqs, wqs->context);
+    if (wqs->updateQQNumCount == 0)
+        wqs->updatUserInfoCallBack(wqs, wqs->context);
 }
 
 static void _add_category(JsonArray *array,
@@ -227,7 +346,6 @@ static void _add_category(JsonArray *array,
 	const gchar *name;
 	gchar *cmd;
 	gint32 idx;
-	GString *tmpStr;
 	
 	wqs = (GWQSession*)user_data;
 	
@@ -240,12 +358,9 @@ static void _add_category(JsonArray *array,
 	if (!(name = json_object_get_string_member(jo, "name"))) {
 		return;
 	}
-	
-	tmpStr = g_string_new("");
-	//GWQAsciiToUtf8(name, tmpStr);
-	//name = tmpStr->str;
+
 	cmd = g_strdup_printf("insert into categories (idx, name) values (%d, \"%s\")", idx, name);
-	g_string_free(tmpStr, TRUE);
+
 	if (!cmd) {
 		return;
 	}
@@ -289,6 +404,9 @@ static void _add_friend(JsonArray *array,
 		return;
 	}
 	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
+    
+    GWQSessionUpdateQQNumByUin(wqs, uin);
+    
 	g_free(cmd);
 }
 
@@ -302,7 +420,6 @@ static void _update_user_info(JsonArray *array,
 	gchar *cmd;
 	const gchar *nick;
 	gint32 face, flag;
-	GString *tmpStr;
 	gint64 uin;
 	
 	wqs = (GWQSession*)user_data;
@@ -324,14 +441,9 @@ static void _update_user_info(JsonArray *array,
 		nick = "";
 	}
 	
-	tmpStr = g_string_new("");
-	
-	//GWQAsciiToUtf8(nick, tmpStr);
-	//nick = tmpStr->str;
 	cmd = g_strdup_printf("update users set nick=\"%s\", flag=%d, face=%d "
 			"where uin=%"G_GINT64_FORMAT,
 			nick, flag, face, uin);
-	g_string_free(tmpStr, TRUE);
 	GWQ_DBG("%s\n", cmd);
 	if (!cmd) {
 		return;
@@ -350,7 +462,6 @@ static void _update_user_markname(JsonArray *array,
 	gchar *cmd;
 	const gchar *markname;
 	gint64 uin;
-	GString *tmpStr;
 	
 	wqs = (GWQSession*)user_data;
 	
@@ -367,14 +478,9 @@ static void _update_user_markname(JsonArray *array,
 		markname = "";
 	}
 	
-	tmpStr = g_string_new("");
-	
-	//GWQAsciiToUtf8(markname, tmpStr);
-	//markname = tmpStr->str;
 	cmd = g_strdup_printf("update users set markname=\"%s\""
 			"where uin=%"G_GINT64_FORMAT,
 			markname, uin);
-	g_string_free(tmpStr, TRUE);
 	GWQ_DBG("%s\n", cmd);
 	if (!cmd) {
 		return;
@@ -388,16 +494,16 @@ int GWQSessionUpdateUserInfo(GWQSession* wqs, GWQSessionCallback callback, gpoin
 	return 0;
 }
 
-GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gchar* qqNum, gint64 qqUin)
+GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gint64 qqNum, gint64 qqUin)
 {
 	GWQUserInfo *ret;
 	sqlite3_stmt *stmt;
 	gchar *cmdStr;
 	const guchar *tmpCCStr;
 	
-	if (qqNum) {
-		cmdStr = g_strdup_printf("select * from users where qqNum=%s", qqNum);
-	} else if (qqUin > 0) {
+	if (qqNum != -1) {
+		cmdStr = g_strdup_printf("select * from users where qqNum=%"G_GINT64_FORMAT, qqNum);
+	} else if (qqUin != -1) {
 		cmdStr = g_strdup_printf("select * from users where uin=%"G_GINT64_FORMAT, qqUin);
 	} else {
 		GWQ_ERR_OUT(ERR_OUT, "\n");
@@ -416,13 +522,7 @@ GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gchar* qqNum, gint64 q
 	
 	ret->uin =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
 	
-	tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_QQ_NUM_COL);
-	if (tmpCCStr) {
-		strncpy(ret->qqNum, (const gchar*)tmpCCStr, sizeof(ret->qqNum));
-		ret->qqNum[sizeof(ret->qqNum)-1] = '\0';
-	} else {
-		ret->qqNum[0] = '\0';
-	}
+	ret->qqNum = sqlite3_column_int64(stmt, USERS_TBL_QQ_NUM_COL);
 	
 	tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
 	if (tmpCCStr) {

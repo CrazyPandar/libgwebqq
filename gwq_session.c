@@ -64,6 +64,8 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
     wqs->psessionid = g_string_new("");
     wqs->index = -1;
     wqs->port = -1;
+    
+    wqs->updateQQNumCount = 0;
     return 0;
 ERR_FREE_STRS:
     g_string_free(wqs->psessionid, TRUE);    
@@ -95,6 +97,12 @@ ERR_FREE_NUM:
 	g_string_free(wqs->passwd, TRUE);
 ERR_OUT:
     return -1;
+}
+
+gpointer GWQSessionGetUserData(GWQSession* wqs)
+{
+    return wqs->context;
+    
 }
 
 int GWQSessionExit(GWQSession* wqs)

@@ -65,6 +65,10 @@ static void _process_poll_resp(SoupSession *ss, SoupMessage *msg,  gpointer user
     wqs = (GWQSession*)user_data;
     
     GWQ_DBG("poll responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (wqs->st != GWQS_ST_IDLE) {
+        goto ERR_OUT;
+    }
+    
     if (msg->status_code != 200) {
         GWQ_ERR_OUT(ERR_OUT, "\n");
     }

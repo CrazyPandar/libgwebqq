@@ -316,7 +316,7 @@ r={
 }
  */
 static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent)
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent)
 {
     gchar *req;
     GWQUserInfo *wui;
@@ -329,7 +329,7 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, Messag
         GWQ_ERR_OUT(ERR_OUT, "\n");
     }
     
-    if (!(wui = GWQSessionGetUserInfo(wqs, NULL, toUin))) {
+    if (!(wui = GWQSessionGetUserInfo(wqs, qqNum, toUin))) {
         GWQ_ERR_OUT(ERR_OUT, "user no found\n");
     }
     
@@ -351,7 +351,7 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, Messag
             "\"psessionid\":\"%s\""
         "}&clientid=%s&psessionid=%s", 
         
-        toUin, wui->face, cnts->str, 
+        wui->uin, wui->face, cnts->str, 
         msg_id++, 
         wqs->clientId->str,
         wqs->psessionid->str,
@@ -370,7 +370,7 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, Messag
             " http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"); /* this is must */
     g_free(tmpCStr);
 	soup_session_queue_message(wqs->sps, wqs->sendMsg, _process_sendBuddyMsg_resp, wqs);
-    //GWQUserInfoFree(wui);
+    GWQUserInfoFree(wui);
     wqs->sendMsgSt = SEND_MSG_ING;
     return 0;
 ERR_FREE_CNTS:
@@ -393,7 +393,6 @@ static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpoin
     JsonNode *jn;
     JsonObject *jo;
     gint32 tmpInt;
-    JsonArray *resJa;
     
     wqs = (GWQSession*)user_data;
     
@@ -418,7 +417,6 @@ static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpoin
         GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
     }
     
-    resJa = NULL;
     if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
         GWQ_ERR("\n");
     } else if (!(jn = json_parser_get_root(jParser))
@@ -429,7 +427,7 @@ static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpoin
     }
     if (!(tmpCStr = json_object_get_string_member(jo, "result"))) {
         GWQ_ERR("sendMsg returned result: %s\n", tmpCStr);
-    } 
+    }
     
     wqs->messageSent(wqs, wqs->msgToSent, tmpInt);
     

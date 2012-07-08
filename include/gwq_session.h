@@ -83,6 +83,8 @@ struct g_webqq_session {
     SoupMessage* sendMsg;
     QQSendMsg* msgToSent;
     MessageSentFunc messageSent;
+    
+    gint64 updateQQNumCount;
 };
 
 #define GWQ_CHAT_ST_HIDDEN "hidden"
@@ -96,5 +98,5 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* c
 int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback);
 int GWQSessionDoPoll(GWQSession* wqs,
         MessageRecievedFunc messageRecieved);
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent);
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent);
 #endif
