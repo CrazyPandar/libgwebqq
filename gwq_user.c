@@ -494,6 +494,49 @@ int GWQSessionUpdateUserInfo(GWQSession* wqs, GWQSessionCallback callback, gpoin
 	return 0;
 }
 
+void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, GWQUserInfo* info))
+{
+	sqlite3_stmt *stmt;
+	gchar *cmdStr = "select * from users"; 
+	const guchar *tmpCCStr;
+    GWQUserInfo *ret;
+    
+	if (SQLITE_OK != sqlite3_prepare(wqs->pUserDb, cmdStr, -1, &stmt, NULL)) {
+		GWQ_ERR_OUT(ERR_OUT, "prepare <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	while (SQLITE_ROW == sqlite3_step(stmt)) {
+        ret = g_slice_new0(GWQUserInfo);
+        ret->nick = g_string_new("");
+        ret->markname = g_string_new("");
+        
+        ret->uin =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
+        
+        ret->qqNum = sqlite3_column_int64(stmt, USERS_TBL_QQ_NUM_COL);
+        
+        tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
+        if (tmpCCStr) {
+            g_string_assign(ret->nick, (const gchar*)tmpCCStr);
+        }
+        
+        tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_MARKNAME_COL);
+        if (tmpCCStr) {
+            g_string_assign(ret->markname, (const gchar*)tmpCCStr);
+        }
+        
+        ret->face = sqlite3_column_int(stmt, USERS_TBL_FACE_COL);
+        ret->category = sqlite3_column_int(stmt, USERS_TBL_CATEGORY_COL);
+        ret->flag = sqlite3_column_int(stmt, USERS_TBL_FLAG_COL);
+        ret->online = sqlite3_column_int(stmt, USERS_TBL_ONLINE_COL);
+        foreachFunc(wqs, ret);
+        GWQUserInfoFree(ret);
+    }
+	sqlite3_finalize(stmt);
+    return;
+ERR_OUT:
+    return;
+}
+
 GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gint64 qqNum, gint64 qqUin)
 {
 	GWQUserInfo *ret;

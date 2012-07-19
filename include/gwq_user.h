@@ -17,4 +17,5 @@ void GWQUserInfoFree(GWQUserInfo* wui);
 int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback);
 int GWQSessionUpdateUserInfo(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx);
 GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, gint64 qqNum, gint64 qqUin);
+void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, GWQUserInfo* info));
 #endif

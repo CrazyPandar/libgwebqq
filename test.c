@@ -53,10 +53,20 @@ static void messageSentHndl(GWQSession* wqs, QQSendMsg* msg, gint32 retCode)
     qq_sendmsg_free(msg);
 }
 
+void _usersForeach(GWQSession* wqs, GWQUserInfo* user)
+{
+    GWQ_MSG("qqNum:%"G_GINT64_FORMAT",\t nick:%s,\t markname:%s\n", 
+            user->qqNum, user->nick->str ,user->markname->str);
+}
+
 static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
 {
     QQSendMsg *qsm;
     QQMsgContent *qmc;
+    
+    GWQ_MSG("=== Buddies List ===\n");
+    GWQSessionUsersForeach(wqs, _usersForeach);
+    GWQ_MSG("====================\n");
     
     GWQ_DBG("Waiting for message\n");
     GWQSessionDoPoll(wqs, messageRecieved);
@@ -66,8 +76,8 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
 
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_STRING_T, "来自<libgwebqq>的测试\n");
     qq_sendmsg_add_content(qsm, qmc);
-    qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FACE_T, 110);
-    qq_sendmsg_add_content(qsm, qmc);
+    //qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FACE_T, 110);
+    //qq_sendmsg_add_content(qsm, qmc);
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FONT_T, "宋体", 12, "000000", 0,0,0);
     qq_sendmsg_add_content(qsm, qmc);
 
