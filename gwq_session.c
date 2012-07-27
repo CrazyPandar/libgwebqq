@@ -99,6 +99,22 @@ ERR_OUT:
     return -1;
 }
 
+GWQSession* GWQSessionNew(const gchar* qqNum, const gchar* passwd, void* context)
+{
+    GWQSession *ret;
+    if (!(ret = g_slice_new0(GWQSession))) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    if (GWQSessionInit(ret, qqNum, passwd, context)) {
+        GWQ_ERR_OUT(ERR_FREE_RET, "\n")
+    }
+    return ret;
+ERR_FREE_RET:
+    g_slice_free(GWQSession, ret);
+ERR_OUT:
+    return NULL;
+}
+
 gpointer GWQSessionGetUserData(GWQSession* wqs)
 {
     return wqs->context;
@@ -129,4 +145,10 @@ int GWQSessionExit(GWQSession* wqs)
 
 	g_string_free(wqs->passwd, TRUE);
     return 0;
+}
+
+void GWQSessionDestroy(GWQSession* wqs)
+{
+    GWQSessionExit(wqs);
+    g_slice_free(GWQSession, wqs);
 }

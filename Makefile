@@ -10,7 +10,7 @@ export CFLAGS LDFLAGS
 
 VER ?= $(shell cat VERSION)
 RELEASE_PATH ?= ..
-all install clean:
+all install uninstall clean:
 	@for i in `echo $(TARGETS)`; do \
 		$(MAKE) -f $$i.makefile $@ || exit 1; \
 	done
