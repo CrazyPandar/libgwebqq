@@ -109,7 +109,7 @@ int GWQSessionLogOut(GWQSession* wqs);
 
 int GWQSessionDoPoll(GWQSession* wqs);
 
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm);
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm);
 
 void GWQSessionSetCallBack(GWQSession* wqs, 
         GWQSessionCallback loginCallBack,

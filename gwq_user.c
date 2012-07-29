@@ -41,14 +41,21 @@ static void _update_user_markname(JsonArray *array,
 #define USERS_TBL_CATEGORY_COL	5
 #define USERS_TBL_FLAG_COL	6
 #define USERS_TBL_ONLINE_COL	7
-#define CREATE_USERS_TABLE_STMT	"create table if not exists users (uin INTEGER PRIMARY KEY, qqNum INTEGER, nick TEXT, markname TEXT, longNick TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER)"
+#define USERS_TBL_LONG_NICK_COL	8
+#define CREATE_USERS_TABLE_STMT	"create table if not exists users (uin INTEGER PRIMARY KEY, qqNum INTEGER, nick TEXT, markname TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER, longNick TEXT)"
+#define CATEGS_TBL_IDX_COL  0
+#define CATEGS_TBL_NAME_COL 1
 #define CREATE_CATOGERIES_TABLE_STMT "create table if not exists categories (idx INTEGER, name TEXT)"
 
 void GWQUserInfoFree(GWQUserInfo* wui)
 {
     GWQ_DBG("==>GWQUserInfoFree\n");
-	g_string_free(wui->nick, TRUE);
-	g_string_free(wui->markname, TRUE);
+    if (wui->lnick)
+        g_free(wui->lnick);
+    if (wui->nick)
+        g_free(wui->nick);
+    if (wui->markname)
+        g_free(wui->markname);
 	g_slice_free(GWQUserInfo, wui);
 }
 
@@ -206,7 +213,7 @@ int GWQSessionUpdateLongNickByUin(GWQSession* wqs, gint64 uin)
     msg = soup_message_new("GET", str->str);
     soup_message_headers_append (msg->request_headers, "Referer", 
             "http://s.web2.qq.com/proxy.html?v=20101025002"); /* this is must */
-    soup_session_queue_message (wqs->sps, msg, _process_get_qq_num_resp, wqs);
+    soup_session_queue_message (wqs->sps, msg, _process_get_long_nick_resp, wqs);
     g_string_free(str, TRUE);
 
     return 0;
@@ -283,7 +290,7 @@ static void _process_get_long_nick_resp(SoupSession *ss, SoupMessage *msg,  gpoi
         GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
     }
     
-	cmd = g_strdup_printf("update users set =%s "
+	cmd = g_strdup_printf("update users set longNick=\"%s\" "
 			"where uin=%"G_GINT64_FORMAT,
 			lnick, uin);
 	GWQ_DBG("%s\n", cmd);
@@ -613,7 +620,7 @@ void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, 
 {
 	sqlite3_stmt *stmt;
 	gchar *cmdStr = "select * from users"; 
-	const guchar *tmpCCStr;
+	const gchar *tmpCCStr;
     GWQUserInfo *ret;
     
 	if (SQLITE_OK != sqlite3_prepare(wqs->pUserDb, cmdStr, -1, &stmt, NULL)) {
@@ -622,21 +629,24 @@ void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, 
 	
 	while (SQLITE_ROW == sqlite3_step(stmt)) {
         ret = g_slice_new0(GWQUserInfo);
-        ret->nick = g_string_new("");
-        ret->markname = g_string_new("");
         
         ret->uin =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
         
         ret->qqNum = sqlite3_column_int64(stmt, USERS_TBL_QQ_NUM_COL);
         
-        tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
+        tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
         if (tmpCCStr) {
-            g_string_assign(ret->nick, (const gchar*)tmpCCStr);
+            ret->nick = g_strdup(tmpCCStr);
         }
         
-        tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_MARKNAME_COL);
+        tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_MARKNAME_COL);
         if (tmpCCStr) {
-            g_string_assign(ret->markname, (const gchar*)tmpCCStr);
+            ret->markname = g_strdup(tmpCCStr);
+        }
+        
+        tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_LONG_NICK_COL);
+        if (tmpCCStr) {
+            ret->lnick = g_strdup(tmpCCStr);
         }
         
         ret->face = sqlite3_column_int(stmt, USERS_TBL_FACE_COL);
@@ -657,7 +667,7 @@ GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gint64 qqNum, gint64 q
 	GWQUserInfo *ret;
 	sqlite3_stmt *stmt;
 	gchar *cmdStr;
-	const guchar *tmpCCStr;
+	const gchar *tmpCCStr;
 	
 	if (qqNum != -1) {
 		cmdStr = g_strdup_printf("select * from users where qqNum=%"G_GINT64_FORMAT, qqNum);
@@ -675,34 +685,37 @@ GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, const gint64 qqNum, gint64 q
 		GWQ_ERR_OUT(ERR_FINALIZE_STMT, "step <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
 	}
 	ret = g_slice_new0(GWQUserInfo);
-	ret->nick = g_string_new("");
-	ret->markname = g_string_new("");
-	
 	ret->uin =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
 	
 	ret->qqNum = sqlite3_column_int64(stmt, USERS_TBL_QQ_NUM_COL);
 	
-	tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
+	tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_NICK_COL);
 	if (tmpCCStr) {
-		g_string_assign(ret->nick, (const gchar*)tmpCCStr);
+		ret->nick = g_strdup(tmpCCStr);
 	}
 	
-	tmpCCStr = sqlite3_column_text(stmt, USERS_TBL_MARKNAME_COL);
+	tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_MARKNAME_COL);
 	if (tmpCCStr) {
-		g_string_assign(ret->markname, (const gchar*)tmpCCStr);
+		ret->markname = g_strdup(tmpCCStr);
 	}
 	
+    tmpCCStr = (const gchar*)sqlite3_column_text(stmt, USERS_TBL_LONG_NICK_COL);
+	if (tmpCCStr) {
+		ret->lnick = g_strdup(tmpCCStr);
+	}
+    
 	ret->face = sqlite3_column_int(stmt, USERS_TBL_FACE_COL);
 	ret->category = sqlite3_column_int(stmt, USERS_TBL_CATEGORY_COL);
 	ret->flag = sqlite3_column_int(stmt, USERS_TBL_FLAG_COL);
 	ret->online = sqlite3_column_int(stmt, USERS_TBL_ONLINE_COL);
 	
 	sqlite3_finalize(stmt);
+    g_free(cmdStr);
 	return ret;
 
 ERR_FREE_RET:
-	g_string_free(ret->markname, TRUE);
-	g_string_free(ret->nick, TRUE);
+	g_free(ret->markname);
+	g_free(ret->nick);
 	g_free(ret);
 ERR_FINALIZE_STMT:
 	sqlite3_finalize(stmt);
@@ -711,3 +724,86 @@ ERR_FREE_CMD_STR:
 ERR_OUT:
 	return NULL;
 }
+
+int GWQSessionGetUinByNum(GWQSession* wqs, gint64 num, gint64* uin)
+{
+	sqlite3_stmt *stmt;
+	gchar *cmdStr;
+	
+    cmdStr = g_strdup_printf("select uin from users where qqNum=%"G_GINT64_FORMAT, num);
+
+	if (SQLITE_OK != sqlite3_prepare(wqs->pUserDb, cmdStr, -1, &stmt, NULL)) {
+		GWQ_ERR_OUT(ERR_FREE_CMD_STR, "prepare <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	if (SQLITE_ROW != sqlite3_step(stmt)) {
+		GWQ_ERR_OUT(ERR_FINALIZE_STMT, "step <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	*uin =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
+
+	sqlite3_finalize(stmt);
+    g_free(cmdStr);
+	return 0;
+
+ERR_FINALIZE_STMT:
+	sqlite3_finalize(stmt);
+ERR_FREE_CMD_STR:
+	g_free(cmdStr);
+ERR_OUT:
+	return -1;
+}
+
+int GWQSessionGetNumByUin(GWQSession* wqs, gint64 uin, gint64* num)
+{
+	sqlite3_stmt *stmt;
+	gchar *cmdStr;
+	
+    cmdStr = g_strdup_printf("select qqNum from users where uin=%"G_GINT64_FORMAT, uin);
+
+	if (SQLITE_OK != sqlite3_prepare(wqs->pUserDb, cmdStr, -1, &stmt, NULL)) {
+		GWQ_ERR_OUT(ERR_FREE_CMD_STR, "prepare <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	if (SQLITE_ROW != sqlite3_step(stmt)) {
+		GWQ_ERR_OUT(ERR_FINALIZE_STMT, "step <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	*num =  sqlite3_column_int64(stmt, USERS_TBL_UIN_COL);
+
+	sqlite3_finalize(stmt);
+    g_free(cmdStr);
+	return 0;
+
+ERR_FINALIZE_STMT:
+	sqlite3_finalize(stmt);
+ERR_FREE_CMD_STR:
+	g_free(cmdStr);
+ERR_OUT:
+	return -1;
+}
+
+void GWQSessionCategoriesForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, gint32 idx, const gchar* name))
+{
+	sqlite3_stmt *stmt;
+	gchar *cmdStr = "select * from categories"; 
+    gint32 idx;
+	const gchar *tmpCCStr;
+    
+	if (SQLITE_OK != sqlite3_prepare(wqs->pUserDb, cmdStr, -1, &stmt, NULL)) {
+		GWQ_ERR_OUT(ERR_OUT, "prepare <%s> failed: %s\n", cmdStr, sqlite3_errmsg(wqs->pUserDb));
+	}
+	
+	while (SQLITE_ROW == sqlite3_step(stmt)) {
+        idx =  sqlite3_column_int(stmt, CATEGS_TBL_IDX_COL);
+        
+        tmpCCStr = (const gchar*)sqlite3_column_text(stmt, CATEGS_TBL_NAME_COL);
+        
+        foreachFunc(wqs, idx, tmpCCStr);
+    }
+	sqlite3_finalize(stmt);
+    return;
+ERR_OUT:
+    return;
+}
+

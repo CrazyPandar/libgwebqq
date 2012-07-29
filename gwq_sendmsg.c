@@ -316,10 +316,9 @@ r={
 }
  */
 static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm)
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm)
 {
     gchar *req;
-    GWQUserInfo *wui;
     GString *cnts;
     static int msg_id;
     gchar *tmpCStr, *escaped;
@@ -329,12 +328,8 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMs
         GWQ_ERR_OUT(ERR_OUT, "\n");
     }
     
-    if (!(wui = GWQSessionGetUserInfo(wqs, qqNum, toUin))) {
-        GWQ_ERR_OUT(ERR_OUT, "user not found\n");
-    }
-    
     if (!(cnts = qq_sendmsg_contents_tostring(qsm))) {
-        GWQ_ERR_OUT(ERR_FREE_WUI, "gen msg contents failed\n");
+        GWQ_ERR_OUT(ERR_OUT, "gen msg contents failed\n");
     }
     
     wqs->msgToSent = qsm;
@@ -350,7 +345,7 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMs
             "\"psessionid\":\"%s\""
         "}&clientid=%s&psessionid=%s", 
         
-        wui->uin, wui->face, cnts->str, 
+        toUin, 40, cnts->str, 
         msg_id++, 
         wqs->clientId->str,
         wqs->psessionid->str,
@@ -369,13 +364,10 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMs
             " http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"); /* this is must */
     g_free(tmpCStr);
 	soup_session_queue_message(wqs->sps, wqs->sendMsg, _process_sendBuddyMsg_resp, wqs);
-    GWQUserInfoFree(wui);
     wqs->sendMsgSt = SEND_MSG_ING;
     return 0;
 ERR_FREE_CNTS:
     g_string_free(cnts, TRUE);
-ERR_FREE_WUI:
-    GWQUserInfoFree(wui);
 ERR_OUT:
     return -1;
 }

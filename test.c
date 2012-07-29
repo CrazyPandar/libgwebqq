@@ -56,7 +56,7 @@ static void _MessageSent(GWQSession* wqs, QQSendMsg* msg, gint32 retCode)
 void _usersForeach(GWQSession* wqs, GWQUserInfo* user)
 {
     GWQ_MSG("qqNum:%"G_GINT64_FORMAT",\t nick:%s,\t markname:%s\n", 
-            user->qqNum, user->nick->str ,user->markname->str);
+            user->qqNum, user->nick ,user->markname);
 }
 
 static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
@@ -80,10 +80,11 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
     //qq_sendmsg_add_content(qsm, qmc);
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FONT_T, "宋体", 12, "000000", 0,0,0);
     qq_sendmsg_add_content(qsm, qmc);
-
+    /*
     if (GWQSessionSendBuddyMsg(wqs, QQNumForTestMsg, -1LL, qsm)) {
         GWQ_ERR("Sent failed, BUSY sending message, please try later\n");
     }
+    * */
 }
 
 static void _LoginCallback(GWQSession* wqs, void* ctx)
