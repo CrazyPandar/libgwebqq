@@ -53,16 +53,21 @@ endif
 $(TARGET).$(VER):$(OBJS)
 	$(CC) $(LDFLAGS) -o$@ $^
 
+_INST_INC_DIR = $(DESTDIR)/usr/include/libgwebqq
+_INST_LIB_DIR = $(DESTDIR)/usr/lib
 install:
-	mkdir -p $(prefix)/lib
-	mkdir -p $(prefix)/include/libchunfeng
-	cp -dR ${TARGET} ${TARGET}.${VER} $(prefix)/lib
-	rm -rf $(prefix)/include/libchunfeng/*
-	cp -dR include/* $(prefix)/include/libchunfeng
-	echo -n $(DEP_LIBS_FLAGS) > $(prefix)/lib/$(TARGET).deplibs
+	rm -rf $(_INST_INC_DIR)
+	mkdir -p $(_INST_INC_DIR)
+	cp -dR include/* $(_INST_INC_DIR)
+	mkdir -p $(_INST_LIB_DIR)
+	cp -dR ${TARGET} ${TARGET}.${VER} $(_INST_LIB_DIR)
+	echo -n $(DEP_LIBS_FLAGS) > $(_INST_LIB_DIR)/$(TARGET).deplibs
      
 uninstall:
-	rm -rf $(prefix)/lib/${TARGET} $(prefix)/lib/${TARGET}.$(VER)
+	rm -rf $(_INST_INC_DIR) \
+		$(_INST_LIB_DIR)/${TARGET} \
+		$(_INST_LIB_DIR)/${TARGET}.$(VER) \
+		$(_INST_LIB_DIR)/$(TARGET).deplibs
 
 clean:
 	rm -rf test $(TARGET)  $(TARGET).${VER} *.o

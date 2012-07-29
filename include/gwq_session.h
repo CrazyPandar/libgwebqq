@@ -97,10 +97,20 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
 
 int GWQSessionExit(GWQSession* wqs);
 
+GWQSession* GWQSessionNew(const gchar* qqNum, const gchar* passwd, void* context);
+
+void GWQSessionDestroy(GWQSession* wqs);
+
+gpointer GWQSessionGetUserData(GWQSession* wqs);
+
 int GWQSessionLogin(GWQSession* wqs, const gchar* chatStatus);
+
 int GWQSessionLogOut(GWQSession* wqs);
+
 int GWQSessionDoPoll(GWQSession* wqs);
+
 int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm);
+
 void GWQSessionSetCallBack(GWQSession* wqs, 
         GWQSessionCallback loginCallBack,
         GWQSessionCallback  logoutCallBack,
@@ -108,4 +118,5 @@ void GWQSessionSetCallBack(GWQSession* wqs,
         MessageSentCallBack messageSent,
         UpdateQQNumByUinCallBack updateQQNumByUinCB,
         UpdateLongNickByUinCallBack updateLongNickByUinCB);
+
 #endif

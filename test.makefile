@@ -48,13 +48,8 @@ $(TARGET).$(VER):$(OBJS)
 
 	
 install:
-	mkdir -p $(prefix)/bin
-	cp -af ${TARGET} ${TARGET}.${VER} $(prefix)/bin
 
-	
 uninstall:
-	rm -rf $(prefix)/bin/${TARGET} $(prefix)/bin/${TARGET}.$(VER)
-
 	
 clean:
 	rm -rf $(TARGET)  $(TARGET).${VER} *.o
