@@ -7,16 +7,13 @@ void _PollResultArrayForeach(JsonArray *array,
                                      guint index_,
                                      JsonNode *element_node,
                                      gpointer user_data);
-int GWQSessionDoPoll(GWQSession* wqs,
-        MessageRecievedFunc messageRecieved)
+int GWQSessionDoPoll(GWQSession* wqs)
 {
     gchar *tmpCStr, *escaped;
     
     if (wqs->st != GWQS_ST_IDLE) {
         GWQ_ERR_OUT(ERR_OUT, "\n");
     }
-    
-    wqs->messageRecieved =messageRecieved;
     
     tmpCStr = g_strdup_printf("http://d.web2.qq.com/channel/poll2?clientid=%s&psessionid=%s&t=%ld", 
         wqs->clientId->str, wqs->psessionid->str, GetNowMillisecond()
@@ -115,7 +112,7 @@ static void _process_poll_resp(SoupSession *ss, SoupMessage *msg,  gpointer user
     g_free(tmpCStr);
     GWQ_ERR("Fix me : why soup_session_requeue_message() fails here!!!!!!!!!!!!!!!!!!!!!\n");
     //soup_session_requeue_message(wqs->sps, msg);
-    GWQSessionDoPoll(wqs, wqs->messageRecieved);
+    GWQSessionDoPoll(wqs);
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);
@@ -161,7 +158,9 @@ void _PollResultArrayForeach(JsonArray *array,
             rMsg = gwq_create_kick_message(jo);
         }
         if (rMsg) {
-            wqs->messageRecieved(wqs, rMsg);
+            if (wqs->messageRecieved) {
+                wqs->messageRecieved(wqs, rMsg);
+            }
             qq_recvmsg_free(rMsg);
         }
     }

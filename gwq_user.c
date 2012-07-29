@@ -25,7 +25,7 @@ static void _update_user_markname(JsonArray *array,
  * 
  * friends table
  * =============
- * uin(int64)	qqNum(int64)	nick(string)	markname(string)	face(uint32)	category(uint32)	flag(uint32) online(uint32)
+ * uin(int64)	qqNum(int64)	nick(string)	markname(string)    longNIck(string)	face(uint32)	category(uint32)	flag(uint32) online(uint32)
  * 
  * category table
  * ==============
@@ -41,7 +41,7 @@ static void _update_user_markname(JsonArray *array,
 #define USERS_TBL_CATEGORY_COL	5
 #define USERS_TBL_FLAG_COL	6
 #define USERS_TBL_ONLINE_COL	7
-#define CREATE_USERS_TABLE_STMT	"create table if not exists users (uin INTEGER PRIMARY KEY, qqNum INTEGER, nick TEXT, markname TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER)"
+#define CREATE_USERS_TABLE_STMT	"create table if not exists users (uin INTEGER PRIMARY KEY, qqNum INTEGER, nick TEXT, markname TEXT, longNick TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER)"
 #define CREATE_CATOGERIES_TABLE_STMT "create table if not exists categories (idx INTEGER, name TEXT)"
 
 void GWQUserInfoFree(GWQUserInfo* wui)
@@ -93,7 +93,6 @@ int GWQSessionUpdateQQNumByUin(GWQSession* wqs, gint64 uin)
     soup_message_headers_append (msg->request_headers, "Referer", 
             "http://s.web2.qq.com/proxy.html?v=20101025002"); /* this is must */
     soup_session_queue_message (wqs->sps, msg, _process_get_qq_num_resp, wqs);
-    wqs->updateQQNumCount++;
     g_string_free(str, TRUE);
 
     return 0;
@@ -115,7 +114,6 @@ static void _process_get_qq_num_resp(SoupSession *ss, SoupMessage *msg,  gpointe
     gchar *cmd;
     
     wqs = (GWQSession*)user_data;
-    wqs->updateQQNumCount--;
     GWQ_DBG("GWQSessionUpdateQQNumByUin responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
     if (msg->status_code != 200) {
         GWQ_ERR_OUT(ERR_OUT, "\n");
@@ -174,8 +172,9 @@ static void _process_get_qq_num_resp(SoupSession *ss, SoupMessage *msg,  gpointe
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->updateQQNumCount == 0)
-        wqs->updatUserInfoCallBack(wqs, wqs->context);
+    if (wqs->updateQQNumByUinCB) {
+        wqs->updateQQNumByUinCB(wqs, uin, qqNum);
+    }
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);
@@ -183,10 +182,131 @@ ERR_FREE_SBUF:
     soup_buffer_free(sBuf);
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->updateQQNumCount == 0)
-        wqs->updatUserInfoCallBack(wqs, wqs->context);
 }
 
+static void _process_get_long_nick_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
+int GWQSessionUpdateLongNickByUin(GWQSession* wqs, gint64 uin)
+{
+    SoupMessage *msg;
+    GString *str;
+    
+    if (wqs->st != GWQS_ST_IDLE) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    str = g_string_new("");
+    g_string_printf(str, 
+            "http://s.web2.qq.com//api/get_single_long_nick2?tuin=%"G_GINT64_FORMAT
+            "&verifysession=&type=1&code=&vfwebqq=%s&t=%"G_GINT32_FORMAT,
+            uin,
+            wqs->vfwebqq->str, 
+            g_random_int());
+    
+    GWQ_DBG("GET %s\n", str->str);
+    msg = soup_message_new("GET", str->str);
+    soup_message_headers_append (msg->request_headers, "Referer", 
+            "http://s.web2.qq.com/proxy.html?v=20101025002"); /* this is must */
+    soup_session_queue_message (wqs->sps, msg, _process_get_qq_num_resp, wqs);
+    g_string_free(str, TRUE);
+
+    return 0;
+ERR_OUT:
+    return -1;
+}
+
+
+static void _process_get_long_nick_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
+{
+    GWQSession *wqs;
+    const guint8* data;
+    gsize size;
+    SoupBuffer *sBuf;
+    JsonParser *jParser;
+    JsonNode *jn;
+    JsonObject *jo;
+    gint64 uin;
+    gchar *cmd;
+    JsonArray *ja;
+    const gchar *lnick;
+    
+    wqs = (GWQSession*)user_data;
+    GWQ_DBG("GWQSessionUpdateLongNickByUin responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (msg->status_code != 200) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    
+    sBuf = soup_message_body_flatten(msg->response_body);
+    if (!sBuf) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    soup_buffer_get_data(sBuf, &data, &size);
+    if (!data || size <=0 ) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+    
+    if (!(jParser = json_parser_new())) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    
+    if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jn = json_parser_get_root(jParser))
+            || !(jo = json_node_get_object(jn))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (0 != json_object_get_int_member(jo, "retcode")) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    //if (!(jo = json_object_get_object_member(jo, "result"))) {
+    //    GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    //}
+    
+    if (!(ja = json_object_get_array_member(jo, "result"))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jo = json_array_get_object_element(ja, 0))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if ((lnick = json_object_get_string_member(jo, "lnick")) <= 0) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if ((uin = json_object_get_int_member(jo, "uin")) <= 0) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+	cmd = g_strdup_printf("update users set =%s "
+			"where uin=%"G_GINT64_FORMAT,
+			lnick, uin);
+	GWQ_DBG("%s\n", cmd);
+	if (!cmd) {
+		GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+	}
+	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
+	g_free(cmd);
+    
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    if (wqs->updateLongNickByUinCB) {
+        wqs->updateLongNickByUinCB(wqs, uin, lnick);
+    }
+    return;
+ERR_FREE_J_PARSER:
+    g_object_unref(jParser);
+ERR_FREE_SBUF:
+    soup_buffer_free(sBuf);
+ERR_OUT:
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+}
 
 int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback)
 {
@@ -323,8 +443,7 @@ static void _process_get_user_friends2_resp(SoupSession *ss, SoupMessage *msg,  
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->updateQQNumCount == 0)
-        wqs->updatUserInfoCallBack(wqs, wqs->context);
+    wqs->updatUserInfoCallBack(wqs, wqs->context);
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);
@@ -332,8 +451,6 @@ ERR_FREE_SBUF:
     soup_buffer_free(sBuf);
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
-    if (wqs->updateQQNumCount == 0)
-        wqs->updatUserInfoCallBack(wqs, wqs->context);
 }
 
 static void _add_category(JsonArray *array,
@@ -404,9 +521,7 @@ static void _add_friend(JsonArray *array,
 		return;
 	}
 	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
-    
-    GWQSessionUpdateQQNumByUin(wqs, uin);
-    
+
 	g_free(cmd);
 }
 
@@ -489,7 +604,7 @@ static void _update_user_markname(JsonArray *array,
 	g_free(cmd);
 }
 
-int GWQSessionUpdateUserInfo(GWQSession* wqs, GWQSessionCallback callback, gpointer callbackCtx)
+int GWQSessionUpdateUserDetailedInfoByUin(GWQSession* wqs, gint64 uin)
 {
 	return 0;
 }

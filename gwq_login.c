@@ -16,7 +16,7 @@ static void _GWQGenClientId(GWQSession* wqs);
 static int _EncPwdVc(const gchar* passwd, const gchar* vcode, 
         guchar* vcUinAry, int vcUinAryLen, GString *ret);
 
-int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* chatStatus)
+int GWQSessionLogin(GWQSession* wqs, const gchar* chatStatus)
 {
     SoupMessage *msg;
     GString *str;
@@ -33,7 +33,6 @@ int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* c
     GWQ_DBG("do check\n");
     soup_session_queue_message (wqs->sps, msg, _process_check_resp, wqs);
     g_string_free(str, TRUE);
-    wqs->loginCallBack = callback;
     wqs->st = GWQS_ST_LOGIN;
     return 0;
 ERR_OUT:
@@ -123,7 +122,9 @@ static void _process_check_resp(SoupSession *ss, SoupMessage *msg,  gpointer use
         || wqs->vcUinAryLen > sizeof(wqs->vcUinAry)
         || _GWQSessionDoLogin(wqs)) {
         wqs->st = GWQS_ST_OFFLINE;
-        wqs->loginCallBack(wqs, wqs->context);
+        if (wqs->loginCallBack) {
+            wqs->loginCallBack(wqs, wqs->context);
+        }
     }
 }
 
@@ -362,7 +363,7 @@ ERR_OUT:
     wqs->loginCallBack(wqs, wqs->context);
 }
 
-int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback)
+int GWQSessionLogOut(GWQSession* wqs)
 {
     SoupMessage *msg;
     GString *str;
@@ -379,7 +380,6 @@ int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback)
     GWQ_DBG("do logout\n");
     soup_session_queue_message (wqs->sps, msg, _process_logout_resp, wqs);
     g_string_free(str, TRUE);
-    wqs->loginCallBack = callback;
     wqs->st = GWQS_ST_LOGOUT;
     return 0;
 ERR_OUT:
@@ -438,7 +438,9 @@ static void _process_logout_resp(SoupSession *ss, SoupMessage *msg,  gpointer us
     }
     
     wqs->st = GWQS_ST_OFFLINE;
-    wqs->loginCallBack(wqs, wqs->context);
+    if (wqs->logoutCallBack) {
+        wqs->logoutCallBack(wqs, wqs->context);
+    }
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
@@ -450,7 +452,9 @@ ERR_FREE_SBUF:
 ERR_OUT:
     soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     wqs->st = GWQS_ST_IDLE;
-    wqs->loginCallBack(wqs, wqs->context);
+    if (wqs->logoutCallBack) {
+        wqs->logoutCallBack(wqs, wqs->context);
+    }
 }
 
 struct cookie_key {

@@ -14,8 +14,10 @@
 typedef struct g_webqq_session GWQSession;
 
 typedef void(*GWQSessionCallback)(GWQSession* wqs, void* context);
-typedef void(*MessageRecievedFunc)(GWQSession* wqs, QQRecvMsg* msg);
-typedef void(*MessageSentFunc)(GWQSession* wqs, QQSendMsg* msg, gint32 retCode);
+typedef void(*MessageRecievedCallBack)(GWQSession* wqs, QQRecvMsg* msg);
+typedef void(*MessageSentCallBack)(GWQSession* wqs, QQSendMsg* msg, gint32 retCode);
+typedef void(*UpdateQQNumByUinCallBack)(GWQSession* wqs, gint64 uin, gint64 qqNum);
+typedef void(*UpdateLongNickByUinCallBack)(GWQSession* wqs, gint64 uin, const gchar* lnick);
 
 struct g_webqq_session {
     SoupSession *sps;
@@ -30,6 +32,7 @@ struct g_webqq_session {
     GString* passwd;
     void* context;
     GWQSessionCallback loginCallBack;
+    GWQSessionCallback logoutCallBack;
     GWQSessionCallback updatUserInfoCallBack;
     enum {
         GWQ_ERR_NO_ERROR,
@@ -73,7 +76,7 @@ struct g_webqq_session {
     
     /* poll implementation */
     SoupMessage* pollMsg;
-    MessageRecievedFunc messageRecieved;
+    MessageRecievedCallBack messageRecieved;
     
     /* send msg */
     enum {
@@ -82,9 +85,9 @@ struct g_webqq_session {
     }sendMsgSt;
     SoupMessage* sendMsg;
     QQSendMsg* msgToSent;
-    MessageSentFunc messageSent;
-    
-    gint64 updateQQNumCount;
+    MessageSentCallBack messageSent;
+    UpdateQQNumByUinCallBack updateQQNumByUinCB;
+    UpdateLongNickByUinCallBack updateLongNickByUinCB;
 };
 
 #define GWQ_CHAT_ST_HIDDEN "hidden"
@@ -94,9 +97,15 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
 
 int GWQSessionExit(GWQSession* wqs);
 
-int GWQSessionLogin(GWQSession* wqs, GWQSessionCallback callback, const gchar* chatStatus);
-int GWQSessionLogOut(GWQSession* wqs, GWQSessionCallback callback);
-int GWQSessionDoPoll(GWQSession* wqs,
-        MessageRecievedFunc messageRecieved);
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent);
+int GWQSessionLogin(GWQSession* wqs, const gchar* chatStatus);
+int GWQSessionLogOut(GWQSession* wqs);
+int GWQSessionDoPoll(GWQSession* wqs);
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm);
+void GWQSessionSetCallBack(GWQSession* wqs, 
+        GWQSessionCallback loginCallBack,
+        GWQSessionCallback  logoutCallBack,
+        MessageRecievedCallBack messageRecieved,
+        MessageSentCallBack messageSent,
+        UpdateQQNumByUinCallBack updateQQNumByUinCB,
+        UpdateLongNickByUinCallBack updateLongNickByUinCB);
 #endif

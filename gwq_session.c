@@ -7,6 +7,7 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
 {
     int s_errno;
     
+    memset(wqs, 0, sizeof(GWQSession));
 	if (!qqNum || !passwd) {
 		GWQ_ERR_OUT(ERR_OUT, "\n");
 	}
@@ -65,7 +66,6 @@ int GWQSessionInit(GWQSession* wqs, const gchar* qqNum, const gchar* passwd, voi
     wqs->index = -1;
     wqs->port = -1;
     
-    wqs->updateQQNumCount = 0;
     return 0;
 ERR_FREE_STRS:
     g_string_free(wqs->psessionid, TRUE);    
@@ -129,4 +129,20 @@ int GWQSessionExit(GWQSession* wqs)
 
 	g_string_free(wqs->passwd, TRUE);
     return 0;
+}
+
+void GWQSessionSetCallBack(GWQSession* wqs, 
+        GWQSessionCallback loginCallBack,
+        GWQSessionCallback  logoutCallBack,
+        MessageRecievedCallBack messageRecieved,
+        MessageSentCallBack messageSent,
+        UpdateQQNumByUinCallBack updateQQNumByUinCB,
+        UpdateLongNickByUinCallBack updateLongNickByUinCB)
+{
+    wqs->loginCallBack = loginCallBack;
+    wqs->logoutCallBack = logoutCallBack;
+    wqs->messageRecieved = messageRecieved;
+    wqs->messageSent = messageSent;
+    wqs->updateQQNumByUinCB = updateQQNumByUinCB;
+    wqs->updateLongNickByUinCB = updateLongNickByUinCB;
 }

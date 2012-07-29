@@ -5,7 +5,7 @@
 static GMainLoop *MainLoop;
 static gint64 QQNumForTestMsg;
 
-static void logoutCallback(GWQSession* wqs, void* ctx)
+static void _LogoutCallback(GWQSession* wqs, void* ctx)
 {
 	if (wqs->st != GWQS_ST_OFFLINE) {
 		GWQ_MSG("Logout failed\n");
@@ -27,9 +27,9 @@ void _DisplayMsg(gpointer data, gpointer user_data)
     }
 }
 
-void messageRecieved(GWQSession* wqs, QQRecvMsg* msg)
+void _MessageRecieved(GWQSession* wqs, QQRecvMsg* msg)
 {
-    GWQ_DBG("==>messageRecieved()\n");
+    GWQ_DBG("==>_MessageRecieved()\n");
     switch (msg->msg_type) {
         case MSG_STATUS_CHANGED_T:
             GWQ_MSG("uin=%"G_GINT64_FORMAT", status:%s\n", msg->uin, msg->status->str);
@@ -43,7 +43,7 @@ void messageRecieved(GWQSession* wqs, QQRecvMsg* msg)
     }
 }
 
-static void messageSentHndl(GWQSession* wqs, QQSendMsg* msg, gint32 retCode)
+static void _MessageSent(GWQSession* wqs, QQSendMsg* msg, gint32 retCode)
 {
     if (retCode) {
         GWQ_ERR("Message sent failed\n");
@@ -69,7 +69,7 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
     GWQ_MSG("====================\n");
     
     GWQ_DBG("Waiting for message\n");
-    GWQSessionDoPoll(wqs, messageRecieved);
+    GWQSessionDoPoll(wqs);
     
     GWQ_DBG("Start sending test message\n");
     qsm = qq_sendmsg_new(MSG_BUDDY_T, QQNumForTestMsg);  /* qsm should be freed with qq_sendmsg_free!! */
@@ -81,7 +81,7 @@ static void _UpdateUsersInfoCallback(GWQSession* wqs, void* ctx)
     qmc = qq_msgcontent_new(QQ_MSG_CONTENT_FONT_T, "宋体", 12, "000000", 0,0,0);
     qq_sendmsg_add_content(qsm, qmc);
 
-    if (GWQSessionSendBuddyMsg(wqs, QQNumForTestMsg, -1LL, qsm, messageSentHndl)) {
+    if (GWQSessionSendBuddyMsg(wqs, QQNumForTestMsg, -1LL, qsm)) {
         GWQ_ERR("Sent failed, BUSY sending message, please try later\n");
     }
 }
@@ -102,7 +102,7 @@ static void _LoginCallback(GWQSession* wqs, void* ctx)
 static GWQSession Wqs;
 static void _sig_term_hndl(int sig)
 {
-     GWQSessionLogOut(&Wqs, logoutCallback);
+     GWQSessionLogOut(&Wqs);
 }
 
 int main(int argc, char** argv)
@@ -121,8 +121,16 @@ int main(int argc, char** argv)
     if (GWQSessionInit(&Wqs, argv[1], argv[2], &Wqs)) {
     	GWQ_ERR_OUT(ERR_OUT, "\n");
     }
+    GWQSessionSetCallBack(&Wqs, 
+            _LoginCallback,
+            _LogoutCallback,
+            _MessageRecieved,
+            _MessageSent,
+            NULL,
+            NULL);
+            
     QQNumForTestMsg = g_ascii_strtoll(argv[3], NULL, 10);
-    GWQSessionLogin(&Wqs, _LoginCallback, GWQ_CHAT_ST_HIDDEN);
+    GWQSessionLogin(&Wqs, GWQ_CHAT_ST_HIDDEN);
 	
     g_main_loop_run(MainLoop);
     GWQSessionExit(&Wqs);

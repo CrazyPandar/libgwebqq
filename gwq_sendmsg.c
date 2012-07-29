@@ -316,7 +316,7 @@ r={
 }
  */
 static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
-int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm, MessageSentFunc msgSent)
+int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMsg* qsm)
 {
     gchar *req;
     GWQUserInfo *wui;
@@ -330,14 +330,13 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 qqNum, gint64 toUin, QQSendMs
     }
     
     if (!(wui = GWQSessionGetUserInfo(wqs, qqNum, toUin))) {
-        GWQ_ERR_OUT(ERR_OUT, "user no found\n");
+        GWQ_ERR_OUT(ERR_OUT, "user not found\n");
     }
     
     if (!(cnts = qq_sendmsg_contents_tostring(qsm))) {
         GWQ_ERR_OUT(ERR_FREE_WUI, "gen msg contents failed\n");
     }
     
-    wqs->messageSent =msgSent;
     wqs->msgToSent = qsm;
 
     wqs->sendMsg = soup_message_new("POST", "http://d.web2.qq.com/channel/send_buddy_msg2");
@@ -429,7 +428,9 @@ static void _process_sendBuddyMsg_resp(SoupSession *ss, SoupMessage *msg,  gpoin
         GWQ_ERR("sendMsg returned result: %s\n", tmpCStr);
     }
     
-    wqs->messageSent(wqs, wqs->msgToSent, tmpInt);
+    if (wqs->messageSent) {
+        wqs->messageSent(wqs, wqs->msgToSent, tmpInt);
+    }
     
     g_object_unref(jParser);
     soup_buffer_free(sBuf);
