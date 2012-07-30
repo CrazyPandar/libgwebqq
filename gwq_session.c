@@ -154,7 +154,9 @@ void GWQSessionSetCallBack(GWQSession* wqs,
         MessageRecievedCallBack messageRecieved,
         MessageSentCallBack messageSent,
         UpdateQQNumByUinCallBack updateQQNumByUinCB,
-        UpdateLongNickByUinCallBack updateLongNickByUinCB)
+        UpdateLongNickByUinCallBack updateLongNickByUinCB,
+        UpdateUserDetailedInfoCallBack updateUserDetailedInfoCB,
+        UpdateOnlineBuddiesCallBack updateOnlinebuddiesCB)
 {
     wqs->loginCallBack = loginCallBack;
     wqs->logoutCallBack = logoutCallBack;
@@ -162,6 +164,8 @@ void GWQSessionSetCallBack(GWQSession* wqs,
     wqs->messageSent = messageSent;
     wqs->updateQQNumByUinCB = updateQQNumByUinCB;
     wqs->updateLongNickByUinCB = updateLongNickByUinCB;
+    wqs->updateUserDetailedInfoCB = updateUserDetailedInfoCB;
+    wqs->updateOnlinebuddiesCB = updateOnlinebuddiesCB;
 }
 
 

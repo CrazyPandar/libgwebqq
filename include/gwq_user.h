@@ -1,31 +1,6 @@
 #ifndef _GWQ_USER_H_
 #define _GWQ_USER_H_
 #include "g_webqq.h"
-typedef struct gwq_user_info GWQUserInfo;
-struct gwq_user_info {
-	gint64 uin;
-	gint64 qqNum;
-	gchar* nick;
-	gchar* markname;
-    gchar* lnick;
-	gint32 face;
-	gint32 category;
-	gint32 flag;
-	gint32 online;
-};
+#include "gwq_session.h"
 
-void GWQUserInfoFree(GWQUserInfo* wui);
-int GWQSessionUpdateUsersInfo(GWQSession* wqs, GWQSessionCallback callback);
-int GWQSessionUpdateUserDetailedInfoByUin(GWQSession* wqs, gint64 uin);
-GWQUserInfo* GWQSessionGetUserInfo(GWQSession* wqs, gint64 qqNum, gint64 qqUin);
-void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, GWQUserInfo* info));
-
-void GWQSessionCategoriesForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, gint32 idx, const gchar* name));
-
-int GWQSessionUpdateQQNumByUin(GWQSession* wqs, gint64 uin);
-int GWQSessionUpdateLongNickByUin(GWQSession* wqs, gint64 uin);
-
-int GWQSessionGetUinByNum(GWQSession* wqs, gint64 num, gint64* uin);
-
-int GWQSessionGetNumByUin(GWQSession* wqs, gint64 uin, gint64* num);
 #endif

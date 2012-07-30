@@ -128,6 +128,8 @@ int main(int argc, char** argv)
             _MessageRecieved,
             _MessageSent,
             NULL,
+            NULL,
+            NULL,
             NULL);
             
     QQNumForTestMsg = g_ascii_strtoll(argv[3], NULL, 10);

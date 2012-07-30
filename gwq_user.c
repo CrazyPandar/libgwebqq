@@ -42,7 +42,14 @@ static void _update_user_markname(JsonArray *array,
 #define USERS_TBL_FLAG_COL	6
 #define USERS_TBL_ONLINE_COL	7
 #define USERS_TBL_LONG_NICK_COL	8
-#define CREATE_USERS_TABLE_STMT	"create table if not exists users (uin INTEGER PRIMARY KEY, qqNum INTEGER, nick TEXT, markname TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER, longNick TEXT)"
+#define CREATE_USERS_TABLE_STMT	"create table if not exists users (\
+        uin INTEGER PRIMARY KEY, qqNum INTEGER, \
+        nick TEXT, markname TEXT, face INTEGER, category INTEGER, flag INTEGER, online INTEGER, longNick TEXT, \
+        birth_year INTEGER, birth_month INTEGER, birth_day INTEGER, occupation TEXT, \
+        phone TEXT, allow INTEGER, college TEXT, constel INTEGER, blood INTEGER, \
+        homepage TEXT, stat INTEGER, vip_info INTEGER, country TEXT, city TEXT, \
+        personal TEXT, shengxiao INTEGER, email TEXT, province TEXT, gender TEXT, mobile TEXT\
+        )"
 #define CATEGS_TBL_IDX_COL  0
 #define CATEGS_TBL_NAME_COL 1
 #define CREATE_CATOGERIES_TABLE_STMT "create table if not exists categories (idx INTEGER, name TEXT)"
@@ -299,13 +306,12 @@ static void _process_get_long_nick_resp(SoupSession *ss, SoupMessage *msg,  gpoi
 	}
 	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
 	g_free(cmd);
-    
-    g_object_unref(jParser);
-    soup_buffer_free(sBuf);
-    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     if (wqs->updateLongNickByUinCB) {
         wqs->updateLongNickByUinCB(wqs, uin, lnick);
     }
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
     return;
 ERR_FREE_J_PARSER:
     g_object_unref(jParser);
@@ -611,9 +617,239 @@ static void _update_user_markname(JsonArray *array,
 	g_free(cmd);
 }
 
+
+static void _process_get_friend_info2(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
 int GWQSessionUpdateUserDetailedInfoByUin(GWQSession* wqs, gint64 uin)
 {
-	return 0;
+    SoupMessage *msg;
+    GString *str;
+    
+    if (wqs->st != GWQS_ST_IDLE) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    str = g_string_new("");
+    g_string_printf(str, 
+            "http://s.web2.qq.com/api/get_friend_info2?tuin=%"G_GINT64_FORMAT"&verifysession=&code=&vfwebqq=%s&t=%"G_GINT32_FORMAT,
+            uin,
+            wqs->vfwebqq->str, 
+            g_random_int());
+    
+    GWQ_DBG("GET %s\n", str->str);
+    msg = soup_message_new("GET", str->str);
+    soup_message_headers_append (msg->request_headers, "Referer", 
+            "http://s.web2.qq.com/proxy.html?v=20110412001&callback=1&id=3"); /* this is must */
+    soup_session_queue_message (wqs->sps, msg, _process_get_friend_info2, wqs);
+    g_string_free(str, TRUE);
+
+    return 0;
+ERR_OUT:
+    return -1;
+}
+
+static void _process_get_friend_info2(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
+{
+    GWQSession *wqs;
+    const guint8* data;
+    gsize size;
+    SoupBuffer *sBuf;
+    JsonParser *jParser;
+    JsonNode *jn;
+    JsonObject *jo;
+    GWQUserDetailedInfo dui;
+    char *cmd;
+    
+    wqs = (GWQSession*)user_data;
+    GWQ_DBG("GWQSessionUpdateQQNumByUin responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (msg->status_code != 200) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    
+    sBuf = soup_message_body_flatten(msg->response_body);
+    if (!sBuf) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    soup_buffer_get_data(sBuf, &data, &size);
+    if (!data || size <=0 ) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+    
+    if (!(jParser = json_parser_new())) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    
+    if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jn = json_parser_get_root(jParser))
+            || !(jo = json_node_get_object(jn))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (0 != json_object_get_int_member(jo, "retcode")) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jo = json_object_get_object_member(jo, "result"))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if ((dui.allow = json_object_get_int_member(jo, "allow")) <= 0) {
+        dui.allow = 0;
+    }
+
+    if ((dui.constel = json_object_get_int_member(jo, "constel")) <= 0) {
+        dui.constel = 0;
+    }
+
+    if ((dui.blood = json_object_get_int_member(jo, "blood")) <= 0) {
+        dui.blood = 0;
+    }
+    
+    if ((dui.stat = json_object_get_int_member(jo, "stat")) <= 0) {
+        dui.stat = 0;
+    }
+    
+    if ((dui.vip_info = json_object_get_int_member(jo, "vip_info")) <= 0) {
+        dui.vip_info = 0;
+    }
+    
+    if ((dui.shengxiao = json_object_get_int_member(jo, "shengxiao")) <= 0) {
+        dui.shengxiao = 0;
+    }
+
+    if ((dui.uin = json_object_get_int_member(jo, "uin")) <= 0) {
+        dui.uin = 0;
+    }
+
+    if (!(dui.college = json_object_get_string_member(jo, "college"))) {
+        dui.college = "";
+    }
+    
+    if (!(dui.occupation = json_object_get_string_member(jo, "occupation"))) {
+        dui.occupation = "";
+    }
+    
+    if (!(dui.phone = json_object_get_string_member(jo, "phone"))) {
+        dui.phone = "";
+    }
+    
+    if (!(dui.homepage = json_object_get_string_member(jo, "homepage"))) {
+        dui.homepage = "";
+    }
+    
+    if (!(dui.country = json_object_get_string_member(jo, "country"))) {
+        dui.country = "";
+    }
+    
+    if (!(dui.city = json_object_get_string_member(jo, "city"))) {
+        dui.city = "";
+    }
+    
+    if (!(dui.personal = json_object_get_string_member(jo, "personal"))) {
+        dui.personal = "";
+    }
+    
+    if (!(dui.email = json_object_get_string_member(jo, "email"))) {
+        dui.email = "";
+    }
+    
+    if (!(dui.province = json_object_get_string_member(jo, "province"))) {
+        dui.province = "";
+    }
+    
+    if (!(dui.gender = json_object_get_string_member(jo, "gender"))) {
+        dui.gender = "";
+    }
+    
+    if (!(dui.mobile = json_object_get_string_member(jo, "mobile"))) {
+        dui.mobile = "";
+    }
+    
+    if (!(dui.nick = json_object_get_string_member(jo, "nick"))) {
+        dui.nick = "";
+    } 
+       
+    if ((jo = json_object_get_object_member(jo, "birthday"))) {
+        if ((dui.birth_year = json_object_get_int_member(jo, "year")) <= 0) {
+             dui.birth_year = 0;
+        }
+        if ((dui.birth_month = json_object_get_int_member(jo, "month")) <= 0) {
+             dui.birth_month = 0;
+        }
+        if ((dui.birth_day = json_object_get_int_member(jo, "day")) <= 0) {
+             dui.birth_day = 0;
+        }
+    }
+    
+	cmd = g_strdup_printf("update users set "
+            "birth_year=%"G_GINT32_FORMAT", "
+            "birth_month=%"G_GINT32_FORMAT", "
+            "birth_day=%"G_GINT32_FORMAT", "
+            "allow=%"G_GINT32_FORMAT", "
+            "constel=%"G_GINT32_FORMAT", "
+            "blood=%"G_GINT32_FORMAT", "
+            "stat=%"G_GINT32_FORMAT", "
+            "vip_info=%"G_GINT32_FORMAT","
+            "shengxiao=%"G_GINT32_FORMAT", "
+            "college=\"%s\""", "
+            "occupation=\"%s\""", "
+            "phone=\"%s\""", "
+            "homepage=\"%s\""", "
+            "country=\"%s\""", "
+            "city=\"%s\""", "
+            "personal=\"%s\""", "
+            "email=\"%s\""", "
+            "province=\"%s\""", "
+            "gender=\"%s\""", "
+            "mobile=\"%s\""", "
+            "nick=\"%s\""" "
+			"where uin=%"G_GINT64_FORMAT,
+			dui.birth_year,
+            dui.birth_month,
+            dui.birth_day,
+            dui.allow,
+            dui.constel,
+            dui.blood,
+            dui.stat,
+            dui.vip_info,
+            dui.shengxiao,
+            dui.college,
+            dui.occupation,
+            dui.phone,
+            dui.homepage,
+            dui.country,
+            dui.city,
+            dui.personal,
+            dui.email,
+            dui.province,
+            dui.gender,
+            dui.mobile,
+            dui.nick,
+            dui.uin);
+	GWQ_DBG("%s\n", cmd);
+	if (!cmd) {
+		GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+	}
+	sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
+	g_free(cmd);
+    if (wqs->updateUserDetailedInfoCB) {
+        wqs->updateUserDetailedInfoCB(wqs, &dui);
+    }
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+
+    return;
+ERR_FREE_J_PARSER:
+    g_object_unref(jParser);
+ERR_FREE_SBUF:
+    soup_buffer_free(sBuf);
+ERR_OUT:
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
 }
 
 void GWQSessionUsersForeach(GWQSession* wqs, void(foreachFunc)(GWQSession* wqs, GWQUserInfo* info))
@@ -807,3 +1043,129 @@ ERR_OUT:
     return;
 }
 
+static void _process_get_online_buddies2(SoupSession *ss, SoupMessage *msg,  gpointer user_data);
+int GWQSessionUpdateOnlineBuddies(GWQSession* wqs)
+{
+    SoupMessage *msg;
+    GString *str;
+    
+    if (wqs->st != GWQS_ST_IDLE) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    str = g_string_new("");
+    g_string_printf(str, 
+            "http://d.web2.qq.com/channel/get_online_buddies2?clientid=%s&psessionid=%s&t=%"G_GINT32_FORMAT,
+            wqs->clientId->str,
+            wqs->psessionid->str, 
+            g_random_int());
+    
+    GWQ_DBG("GET %s\n", str->str);
+    msg = soup_message_new("GET", str->str);
+    soup_message_headers_append (msg->request_headers, "Referer", 
+            "http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"); /* this is must */
+    soup_session_queue_message (wqs->sps, msg, _process_get_online_buddies2, wqs);
+    g_string_free(str, TRUE);
+
+    return 0;
+ERR_OUT:
+    return -1;
+}
+
+static void _process_get_online_buddies2(SoupSession *ss, SoupMessage *msg,  gpointer user_data)
+{
+    GWQSession *wqs;
+    const guint8* data;
+    gsize size;
+    SoupBuffer *sBuf;
+    JsonParser *jParser;
+    JsonNode *jn;
+    JsonObject *jo;
+    gint64 uin;
+    gchar *cmd;
+    JsonArray *ja;
+    const gchar *status;
+    gint32 client_type;
+    gint32 len, i;
+    
+    wqs = (GWQSession*)user_data;
+    GWQ_DBG("GWQSessionUpdateOnlineBuddies responsed, retcode=%d, reason:%s\n", msg->status_code, msg->reason_phrase);
+    if (msg->status_code != 200) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+    
+    sBuf = soup_message_body_flatten(msg->response_body);
+    if (!sBuf) {
+        GWQ_ERR_OUT(ERR_OUT, "\n");
+    }
+
+    soup_buffer_get_data(sBuf, &data, &size);
+    if (!data || size <=0 ) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    GWQ_DBG("bodySize=%d\nbody:%s\n", size, data);
+    
+    if (!(jParser = json_parser_new())) {
+        GWQ_ERR_OUT(ERR_FREE_SBUF, "\n");
+    }
+    
+    if (!json_parser_load_from_data(jParser, (const gchar*)data, size, NULL)) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (!(jn = json_parser_get_root(jParser))
+            || !(jo = json_node_get_object(jn))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    if (0 != json_object_get_int_member(jo, "retcode")) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+
+    if (!(ja = json_object_get_array_member(jo, "result"))) {
+        GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+    }
+    
+    len = json_array_get_length(ja);
+    
+    for (i=0; i<len; i++) {
+        if (!(jo = json_array_get_object_element(ja, i))) {
+            GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+        }
+        
+        if ((status = json_object_get_string_member(jo, "status")) <= 0) {
+            status = GWQ_CHAT_ST_OFFLINE;
+        }
+        
+        if ((uin = json_object_get_int_member(jo, "uin")) <= 0) {
+            GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+        }
+        
+        if ((client_type = json_object_get_int_member(jo, "client_type")) <= 0) {
+            client_type = 0;
+        }
+        
+        cmd = g_strdup_printf("update users set online=%"G_GINT32_FORMAT", stat=\"%s\" "
+                "where uin=%"G_GINT64_FORMAT,
+                1, status, uin);
+        GWQ_DBG("%s\n", cmd);
+        if (!cmd) {
+            GWQ_ERR_OUT(ERR_FREE_J_PARSER, "\n");
+        }
+        sqlite3_prepare_step_finalize(wqs->pUserDb, cmd);
+        g_free(cmd);
+        if (wqs->updateOnlinebuddiesCB) {
+            wqs->updateOnlinebuddiesCB(wqs, uin, status, client_type);
+        }
+    }
+    g_object_unref(jParser);
+    soup_buffer_free(sBuf);
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+    return;
+ERR_FREE_J_PARSER:
+    g_object_unref(jParser);
+ERR_FREE_SBUF:
+    soup_buffer_free(sBuf);
+ERR_OUT:
+    soup_session_cancel_message(ss, msg, SOUP_STATUS_CANCELLED);
+}

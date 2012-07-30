@@ -363,6 +363,7 @@ int GWQSessionSendBuddyMsg(GWQSession* wqs, gint64 toUin, QQSendMsg* qsm)
     soup_message_headers_append (wqs->sendMsg->request_headers, "Referer", 
             " http://d.web2.qq.com/proxy.html?v=20110331002&callback=1&id=2"); /* this is must */
     g_free(tmpCStr);
+    GWQ_DBG("do soup_session_queue_message()\n");
 	soup_session_queue_message(wqs->sps, wqs->sendMsg, _process_sendBuddyMsg_resp, wqs);
     wqs->sendMsgSt = SEND_MSG_ING;
     return 0;
